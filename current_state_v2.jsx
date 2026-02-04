@@ -51,12 +51,111 @@
   }
 
   function guideAxisFromName(nm) {
-    // Expect GUIDE_xN / GUIDE_yN
+    // Expect GUIDE_xA, GUIDE_xB, ... or GUIDE_y1, GUIDE_y2, ...
     // Return "x", "y", or null
     if (!nm || nm.indexOf(GUIDE_PREFIX) !== 0) return null;
     if (nm.indexOf("GUIDE_x") === 0) return "x";
     if (nm.indexOf("GUIDE_y") === 0) return "y";
     return null;
+  }
+
+  function getGuideLabel(nm) {
+    // Extract label from guide name: GUIDE_xA -> "A", GUIDE_y12 -> "12"
+    if (!nm || nm.indexOf(GUIDE_PREFIX) !== 0) return null;
+    if (nm.indexOf("GUIDE_x") === 0) return nm.substring(7); // after "GUIDE_x"
+    if (nm.indexOf("GUIDE_y") === 0) return nm.substring(7); // after "GUIDE_y"
+    return null;
+  }
+
+  // =========================
+  // Cell Grid Builder
+  // =========================
+  function buildCellGrid(guideItems) {
+    // Sort x-guides by coord (left to right)
+    var xGuides = [];
+    var yGuides = [];
+
+    for (var i = 0; i < guideItems.length; i++) {
+      var g = guideItems[i];
+      if (g.axis === "x") {
+        xGuides.push({ label: getGuideLabel(g.name), coord: g.coord });
+      } else if (g.axis === "y") {
+        yGuides.push({ label: getGuideLabel(g.name), coord: g.coord });
+      }
+    }
+
+    // Sort x-guides by coord ascending (left to right)
+    xGuides.sort(function(a, b) { return a.coord - b.coord; });
+    // Sort y-guides by coord descending (top to bottom, since y decreases downward)
+    yGuides.sort(function(a, b) { return b.coord - a.coord; });
+
+    // Build columns (spaces between x-guides)
+    var columns = [];
+    for (var c = 0; c < xGuides.length - 1; c++) {
+      columns.push({
+        name: xGuides[c].label,
+        left: xGuides[c].coord,
+        right: xGuides[c + 1].coord
+      });
+    }
+
+    // Build rows (spaces between y-guides)
+    var rows = [];
+    for (var r = 0; r < yGuides.length - 1; r++) {
+      rows.push({
+        name: String(r + 1),
+        top: yGuides[r].coord,
+        bottom: yGuides[r + 1].coord
+      });
+    }
+
+    return { columns: columns, rows: rows };
+  }
+
+  // =========================
+  // Bounds to Cell Reference
+  // =========================
+  function boundsToCell(bounds, cellGrid) {
+    var cols = cellGrid.columns;
+    var rows = cellGrid.rows;
+
+    var startCol = null, endCol = null;
+    var startRow = null, endRow = null;
+
+    // Find columns that the object spans
+    for (var c = 0; c < cols.length; c++) {
+      var col = cols[c];
+      // Object overlaps this column if: obj.left < col.right AND obj.right > col.left
+      if (bounds.left < col.right && bounds.right > col.left) {
+        if (startCol === null) startCol = c;
+        endCol = c;
+      }
+    }
+
+    // Find rows that the object spans
+    for (var r = 0; r < rows.length; r++) {
+      var row = rows[r];
+      // Object overlaps this row if: obj.top > row.bottom AND obj.bottom < row.top
+      // (Remember: y decreases downward, so top > bottom numerically)
+      if (bounds.top > row.bottom && bounds.bottom < row.top) {
+        if (startRow === null) startRow = r;
+        endRow = r;
+      }
+    }
+
+    // If no match found, return null
+    if (startCol === null || startRow === null) {
+      return { cell: null, cellRange: null };
+    }
+
+    var startCellRef = cols[startCol].name + rows[startRow].name;
+    var endCellRef = cols[endCol].name + rows[endRow].name;
+
+    if (startCellRef === endCellRef) {
+      return { cell: startCellRef, cellRange: startCellRef };
+    } else {
+      return { cell: startCellRef, cellRange: startCellRef + ":" + endCellRef };
+    }
   }
 
   function guideCoord(axis, b) {
@@ -150,6 +249,7 @@ if (typeof JSON.stringify !== "function") {
                   ("0" + (new Date()).getHours()).slice(-2) + ":" +
                   ("0" + (new Date()).getMinutes()).slice(-2) + ":" +
                   ("0" + (new Date()).getSeconds()).slice(-2),
+      coordinateSystem: "cell-based",
       grid: { unitPt: GRID, eps: EPS }
     },
     artboards: [],
@@ -157,6 +257,10 @@ if (typeof JSON.stringify !== "function") {
     guides: {
       counts: { x: 0, y: 0, unknown: 0 },
       items: []
+    },
+    cellGrid: {
+      columns: [],
+      rows: []
     },
     semantic: {
       prefixes: SEM_PREFIXES.slice(0),
@@ -224,6 +328,13 @@ if (typeof JSON.stringify !== "function") {
   }
 
   // =========================
+  // Build Cell Grid from Guides
+  // =========================
+  var cellGrid = buildCellGrid(out.guides.items);
+  out.cellGrid.columns = cellGrid.columns;
+  out.cellGrid.rows = cellGrid.rows;
+
+  // =========================
   // Utility: mark composite children
   // =========================
   // We will build:
@@ -252,12 +363,16 @@ if (typeof JSON.stringify !== "function") {
 
       compChildrenByName[cnm] = true;
 
+      var childBounds = boundsObj(child);
+      var childCellRef = boundsToCell(childBounds, cellGrid);
       kids.push({
         name: cnm,
         prefix: cpref,
         typename: child.typename,
         layer: safeLayerName(child),
-        bounds: boundsObj(child)
+        cell: childCellRef.cell,
+        cellRange: childCellRef.cellRange,
+        bounds: childBounds
       });
     }
     return kids;
@@ -280,12 +395,16 @@ if (typeof JSON.stringify !== "function") {
 
     // If this is a COMP_, export it (atomic) with its children
     if (pref === "COMP_") {
+      var compBounds = boundsObj(p);
+      var compCellRef = boundsToCell(compBounds, cellGrid);
       var compEntry = {
         name: pnm,
         prefix: pref,
         typename: p.typename,
         layer: safeLayerName(p),
-        bounds: boundsObj(p),
+        cell: compCellRef.cell,
+        cellRange: compCellRef.cellRange,
+        bounds: compBounds,
         children: []
       };
 
@@ -304,12 +423,16 @@ if (typeof JSON.stringify !== "function") {
       continue;
     }
 
+    var itemBounds = boundsObj(p);
+    var itemCellRef = boundsToCell(itemBounds, cellGrid);
     out.semantic.items.push({
       name: pnm,
       prefix: pref,
       typename: p.typename,
       layer: safeLayerName(p),
-      bounds: boundsObj(p)
+      cell: itemCellRef.cell,
+      cellRange: itemCellRef.cellRange,
+      bounds: itemBounds
     });
     out.semantic.countsByPrefix[pref]++;
   }
