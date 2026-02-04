@@ -462,13 +462,10 @@ if (typeof JSON.stringify !== "function") {
   // Write file
   // =========================
   var now = new Date();
-  var timestamp = now.getFullYear() + "-" +
+  var datestamp = now.getFullYear() + "-" +
                   ("0" + (now.getMonth() + 1)).slice(-2) + "-" +
-                  ("0" + now.getDate()).slice(-2) + "_" +
-                  ("0" + now.getHours()).slice(-2) + "-" +
-                  ("0" + now.getMinutes()).slice(-2) + "-" +
-                  ("0" + now.getSeconds()).slice(-2);
-  var fileName = "doc_state_export_" + timestamp + ".json";
+                  ("0" + now.getDate()).slice(-2);
+  var fileName = "doc_state_export_" + datestamp + ".json";
   var outFile = new File("~/Desktop/" + fileName);
   outFile.encoding = "UTF-8";
   if (!outFile.open("w")) {
