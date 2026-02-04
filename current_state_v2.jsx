@@ -461,10 +461,15 @@ if (typeof JSON.stringify !== "function") {
   // =========================
   // Write file
   // =========================
-  var outFile = new File("~/Desktop/doc_state_export_v2.json");
+  var now = new Date();
+  var datestamp = now.getFullYear() + "-" +
+                  ("0" + (now.getMonth() + 1)).slice(-2) + "-" +
+                  ("0" + now.getDate()).slice(-2);
+  var fileName = "doc_state_export_" + datestamp + ".json";
+  var outFile = new File("~/Desktop/" + fileName);
   outFile.encoding = "UTF-8";
   if (!outFile.open("w")) {
-    alert("Could not write doc_state_export_v2.json to Desktop.");
+    alert("Could not write " + fileName + " to Desktop.");
     return;
   }
 
@@ -473,7 +478,7 @@ if (typeof JSON.stringify !== "function") {
 
   alert(
     "Document state exported.\n\n" +
-    "File: doc_state_export_v2.json (Desktop)\n" +
+    "File: " + fileName + " (Desktop)\n" +
     "Artboards: " + out.artboards.length + "\n" +
     "Guides: " + guideTotal + " (x=" + out.guides.counts.x + ", y=" + out.guides.counts.y + ")\n" +
     "Semantic items (flat): " + semTotal + "\n" +
