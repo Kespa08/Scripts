@@ -1,0 +1,107 @@
+LayoutProfile_v1:
+  meta:
+    id: LP_EXAMPLE_001
+    name: Example Layout Profile
+    version: 1.0
+    compatible_spec: Coordinate Placement Spec v1
+    grid_unit: 3.25pt
+    guide_system: cartesian_guides
+    author: user_or_agent
+    created: YYYY-MM-DD
+
+  guides:
+    reference:
+      x_guides: [x1, x2, x3, x4, x5]
+      y_guides: [y1, y2, y3, y4, y5]
+    notes:
+      - Guides must already exist in the document
+      - Profile never creates or deletes guides
+
+  placement_rules:
+    anchoring:
+      default_anchor: intersection        # intersection | coordinate
+      allow_relative_offsets: true
+      offset_unit: grid
+
+    snapping:
+      required: true
+      axis:
+        x: snap
+        y: snap
+
+    overlap:
+      allowed: true
+      edge_touching: allowed
+
+    distribution:
+      default: even                        # even | clustered | manual
+      axis_priority: none                  # x | y | none
+
+  semantic_rules:
+    ICON_:
+      placement:
+        allowed: true
+        movable: true
+        anchor_priority: [intersection, coordinate]
+      quantity:
+        min: 0
+        max: unrestricted
+
+    COMP_:
+      placement:
+        atomic: true
+        children_ignored: true
+        anchor_priority: [intersection]
+      quantity:
+        min: 0
+        max: unrestricted
+
+    AREA_:
+      placement:
+        allowed: true
+        acts_as_container: false
+        overlaps_allowed: true
+      quantity:
+        min: 0
+        max: unrestricted
+
+    BOUND_:
+      placement:
+        allowed: true
+        defines_boundary_only: true
+      quantity:
+        min: 0
+        max: unrestricted
+
+    LABEL_:
+      placement:
+        allowed: true
+        relative_to: parent                # parent | absolute
+      quantity:
+        min: 0
+        max: unrestricted
+
+  missing_assets:
+    behavior:
+      on_missing: placeholder
+      placeholder:
+        shape: circle
+        color: magenta
+        size: [16pt, 16pt]
+        snapped: true
+
+  validation_policy:
+    pre_generation: required
+    post_generation: required
+    on_failure:
+      stop_and_warn: true
+      allow_override: false
+
+  persistence:
+    save_profile: true
+    store_with:
+      - master_template.json
+      - validation_reports
+      - generation_diffs
+
+end_of_profile: true

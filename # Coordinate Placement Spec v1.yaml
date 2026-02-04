@@ -1,0 +1,127 @@
+spec_name: "Coordinate Placement Spec v1"
+status: "stable"
+context: "Adobe Illustrator diagram generation"
+authoritative_source: "illustrator_document"
+grid_unit_pt: 3.25
+epsilon: 0.01
+
+coordinate_system:
+  guides:
+    description: "All spatial placement is defined relative to Illustrator guides. Guides are the canonical coordinate frame."
+    naming:
+      vertical: "GUIDE_x{n} (left → right)"
+      horizontal: "GUIDE_y{n} (top → bottom)"
+    properties:
+      - "Guides are invisible in export."
+      - "Guides MUST snap to the document grid."
+      - "Guide intersections define legal anchor points."
+      - "Guides are not placeable semantic objects."
+
+grid_and_snapping:
+  rules:
+    - "All placed objects MUST align to the grid within ±epsilon."
+    - "All guide positions MUST align to the grid."
+  validation_checks:
+    - "left"
+    - "top"
+    - "composite bounds"
+
+semantic_prefix_taxonomy:
+  prefixes:
+    GUIDE: "Coordinate infrastructure (guides only)"
+    ICON: "Atomic symbolic assets"
+    COMP: "Composite functional units (grouped, placed as one)"
+    AREA: "Space-occupying elements (zones, furniture, storage)"
+    BOUND: "Boundary / delineation geometry"
+    LABEL: "Meta indicators / annotations"
+    SHAPE: "Non-semantic geometry (discouraged)"
+  naming_rules:
+    - "Every semantic object MUST have a name."
+    - "Numeric suffixes MUST use the form __001, __002, …"
+    - "Numbered instances are interchangeable unless grouped."
+    - "Unknown prefixes FAIL validation."
+
+placement_authority:
+  composites:
+    rules:
+      - "COMP_* objects are placement authorities."
+      - "Child elements of a COMP_* are positioned relative to the parent."
+      - "Child elements MUST NOT be individually placed or snapped."
+  area_objects:
+    rules:
+      - "AREA_* objects represent space occupation (furniture, zones, storage, footprints)."
+      - "AREA_* objects are placed independently."
+      - "AREA_* objects do NOT generate contents."
+  boundary_objects:
+    rules:
+      - "BOUND_* objects define boundaries only."
+      - "BOUND_* objects do NOT occupy space."
+      - "BOUND_* objects do NOT contain other objects."
+
+placement_semantics:
+  anchor_types:
+    guide_intersection:
+      schema: "{ x: 'xN', y: 'yM' }"
+      meaning: "Anchor corresponds to the intersection of GUIDE_xN and GUIDE_yM."
+      example: "{ \"x\": \"x4\", \"y\": \"y7\" }"
+    guide_relative_offset:
+      schema: "{ x: 'xN', y: 'yM', dx: number_pt, dy: number_pt }"
+      constraints:
+        - "dx and dy MUST be grid-aligned."
+      example: "{ \"x\": \"x4\", \"y\": \"y7\", \"dx\": 6.5, \"dy\": 3.25 }"
+
+multiple_objects_and_layout_logic:
+  rules:
+    - "No global flow direction exists."
+    - "Placement patterns (rows, columns, stacks, symmetry) are inferred from example images and expressed as coordinate rules."
+    - "Even distribution is preferred unless example dictates otherwise."
+    - "Overlaps are allowed unless explicitly forbidden."
+
+missing_semantic_assets:
+  when_missing:
+    action: "Insert placeholder"
+    placeholder:
+      shape: "circle"
+      color: "magenta"
+      size_pt: [16, 16]
+      grid_aligned: true
+    rules:
+      - "Placeholder MUST be named."
+      - "Placeholder acts as a semantic stand-in."
+
+capacity_and_failure:
+  rules:
+    - "If placement exceeds intended capacity: generation MUST stop and a warning MUST be issued."
+    - "Silent overflow is not allowed."
+
+example_images_and_llm_interpretation:
+  interpretation_phase:
+    allowed:
+      - "infer alignments, clusters, axes"
+      - "map visible elements to semantic types"
+      - "emit coordinate-based placement rules"
+  conflict_resolution:
+    rules:
+      - "If inferred rules conflict with this spec: user MUST be prompted to choose precedence."
+      - "No automatic override is allowed."
+  persistence:
+    rules:
+      - "Accepted interpretations MAY be saved as reusable layout profiles."
+
+validation_rules:
+  must_enforce:
+    - "all semantic objects are named"
+    - "prefixes are valid"
+    - "placement is grid-aligned"
+    - "composites are treated atomically"
+    - "guides are not treated as placeable objects"
+  authority: "Validation output is authoritative."
+
+authority_model:
+  rules:
+    - "Illustrator document = source of truth"
+    - "Exports (JSON, CSV, reports) = snapshots"
+    - "Manual edits are allowed and treated as corrective"
+    - "Validation determines system consistency"
+
+end_of_spec: true
