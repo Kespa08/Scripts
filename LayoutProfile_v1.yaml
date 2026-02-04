@@ -5,29 +5,29 @@ LayoutProfile_v1:
     version: 1.0
     compatible_spec: Coordinate Placement Spec v1
     grid_unit: 3.25pt
-    guide_system: cartesian_guides
+    coordinate_system: cell_grid
     author: user_or_agent
     created: YYYY-MM-DD
 
-  guides:
-    reference:
-      x_guides: [x1, x2, x3, x4, x5]
-      y_guides: [y1, y2, y3, y4, y5]
+  cell_grid:
+    columns: [A, B, C, D, E]           # Defined by vertical guides GUIDE_xA through GUIDE_xF
+    rows: [1, 2, 3, 4, 5]              # Defined by horizontal guides GUIDE_y1 through GUIDE_y6
     notes:
       - Guides must already exist in the document
       - Profile never creates or deletes guides
+      - Columns are spaces between vertical guides (A = space between xA and xB)
+      - Rows are spaces between horizontal guides (1 = space between y1 and y2)
 
   placement_rules:
     anchoring:
-      default_anchor: intersection        # intersection | coordinate
+      default_anchor: cell                 # cell | cell_center | cell_corner
+      default_anchor_point: top-left       # top-left | top-right | bottom-left | bottom-right | center
       allow_relative_offsets: true
       offset_unit: grid
 
     snapping:
       required: true
-      axis:
-        x: snap
-        y: snap
+      snap_to: cell_boundary               # cell_boundary | grid
 
     overlap:
       allowed: true
@@ -35,14 +35,15 @@ LayoutProfile_v1:
 
     distribution:
       default: even                        # even | clustered | manual
-      axis_priority: none                  # x | y | none
+      axis_priority: none                  # column | row | none
 
   semantic_rules:
     ICON_:
       placement:
         allowed: true
         movable: true
-        anchor_priority: [intersection, coordinate]
+        anchor_priority: [cell, cell_center]
+        typical_size: single_cell          # single_cell | multi_cell
       quantity:
         min: 0
         max: unrestricted
@@ -51,7 +52,8 @@ LayoutProfile_v1:
       placement:
         atomic: true
         children_ignored: true
-        anchor_priority: [intersection]
+        anchor_priority: [cell]
+        typical_size: cell_range           # Often spans multiple cells (e.g., D4:E5)
       quantity:
         min: 0
         max: unrestricted
@@ -61,6 +63,7 @@ LayoutProfile_v1:
         allowed: true
         acts_as_container: false
         overlaps_allowed: true
+        typical_size: cell_range           # Usually spans cells (e.g., D4:F7)
       quantity:
         min: 0
         max: unrestricted
@@ -69,6 +72,7 @@ LayoutProfile_v1:
       placement:
         allowed: true
         defines_boundary_only: true
+        typical_size: cell_range           # Perimeters span multiple cells
       quantity:
         min: 0
         max: unrestricted
@@ -76,7 +80,8 @@ LayoutProfile_v1:
     LABEL_:
       placement:
         allowed: true
-        relative_to: parent                # parent | absolute
+        relative_to: parent                # parent | cell
+        typical_size: single_cell
       quantity:
         min: 0
         max: unrestricted

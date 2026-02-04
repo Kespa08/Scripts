@@ -6,15 +6,24 @@ grid_unit_pt: 3.25
 epsilon: 0.01
 
 coordinate_system:
+  type: "cell-based"
+  description: "Spatial placement uses a cell grid defined by guides. Cells are the spaces between guides, referenced like spreadsheet coordinates."
+
+  cell_notation:
+    columns: "A, B, C, ... (left → right, derived from vertical guides)"
+    rows: "1, 2, 3, ... (top → bottom, derived from horizontal guides)"
+    single_cell: "E2 (column E, row 2)"
+    cell_range: "D4:F7 (spans columns D–F, rows 4–7)"
+
   guides:
-    description: "All spatial placement is defined relative to Illustrator guides. Guides are the canonical coordinate frame."
+    description: "Guides define cell boundaries. The space between GUIDE_xA and GUIDE_xB is column A; space between GUIDE_y1 and GUIDE_y2 is row 1."
     naming:
-      vertical: "GUIDE_x{n} (left → right)"
-      horizontal: "GUIDE_y{n} (top → bottom)"
+      vertical: "GUIDE_xA, GUIDE_xB, ... (define column boundaries)"
+      horizontal: "GUIDE_y1, GUIDE_y2, ... (define row boundaries)"
     properties:
       - "Guides are invisible in export."
       - "Guides MUST snap to the document grid."
-      - "Guide intersections define legal anchor points."
+      - "Cells (spaces between guides) define legal placement zones."
       - "Guides are not placeable semantic objects."
 
 grid_and_snapping:
@@ -60,15 +69,24 @@ placement_authority:
 
 placement_semantics:
   anchor_types:
-    guide_intersection:
-      schema: "{ x: 'xN', y: 'yM' }"
-      meaning: "Anchor corresponds to the intersection of GUIDE_xN and GUIDE_yM."
-      example: "{ \"x\": \"x4\", \"y\": \"y7\" }"
-    guide_relative_offset:
-      schema: "{ x: 'xN', y: 'yM', dx: number_pt, dy: number_pt }"
+    cell_placement:
+      schema: "{ cell: 'A1' }"
+      meaning: "Object is placed within the specified cell."
+      anchor_default: "top-left corner of cell, snapped to grid"
+      example: "{ \"cell\": \"E2\" }"
+    cell_range:
+      schema: "{ cell: 'A1:C3' }"
+      meaning: "Object spans multiple cells (like Excel range notation)."
+      example: "{ \"cell\": \"D4:F7\" }"
+    cell_with_offset:
+      schema: "{ cell: 'A1', dx: number_pt, dy: number_pt }"
       constraints:
         - "dx and dy MUST be grid-aligned."
-      example: "{ \"x\": \"x4\", \"y\": \"y7\", \"dx\": 6.5, \"dy\": 3.25 }"
+      example: "{ \"cell\": \"E2\", \"dx\": 6.5, \"dy\": 3.25 }"
+    cell_anchor_point:
+      schema: "{ cell: 'A1', anchor: 'center' }"
+      anchor_options: ["top-left", "top-right", "bottom-left", "bottom-right", "center"]
+      example: "{ \"cell\": \"E2\", \"anchor\": \"center\" }"
 
 multiple_objects_and_layout_logic:
   rules:
