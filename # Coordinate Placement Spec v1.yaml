@@ -46,7 +46,7 @@ semantic_prefix_taxonomy:
     SHAPE: "Non-semantic geometry (discouraged)"
   naming_rules:
     - "Every semantic object MUST have a name."
-    - "Numeric suffixes MUST use the form __001, __002, …"
+    - "Suffix policy by prefix: LABEL_* uses alphabetical suffixes (__A, __B, __C, ...); all other semantic prefixes use numeric suffixes (__001, __002, ...)."
     - "Numbered instances are interchangeable unless grouped."
     - "Unknown prefixes FAIL validation."
 
