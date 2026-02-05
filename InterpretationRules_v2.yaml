@@ -1,0 +1,507 @@
+﻿map_name: Interpretation rules v2
+status: stable
+created: 2026-02-06
+scope: Illustrator IP diagram reconstruction from reference images
+
+authoritative_sources:
+  - "# Coordinate Placement Spec v1.yaml"
+  - "LayoutProfile_v1.yaml"
+  - "User-confirmed mapping decisions (2026-02-04)"
+
+fixed_document_rules:
+  keep_guides_unchanged: true
+  keep_layers_unchanged: true
+  overlap_allowed: true
+  strict_cell_grid_required: false
+  follow_illustrator_layout_logic: true
+
+image_interpretation_rules:
+  default_behavior:
+    count_rule: "For each color highlight detected, it must correspond to one of the following objects:
+    
+  text_in_reference_images:
+    policy: referential_only
+    rule: "Do not render words/sentences from the source image unless the object is a LABEL_* object."
+
+# OUTPUT FORMAT
+# When analyzing an image, provide results in this structure:
+
+output_format:
+  per_object:
+    - candidate: "ICON_Staff__001"
+      type: "ICON"
+      confidence: "[0.5-0.95]"
+      evidence:
+        visual: "person silhouette icon"
+        textual: null
+        spatial: "left side of processing zone"
+      notes: null  # Optional clarifications
+  
+  color_semantics:
+    - highlight_color: "orange"
+      count: 2
+      generated_objects:
+        - "LABEL__A"
+        - "LABEL__B"
+      placement: "top-left of district unfolding zone, top-left of region unfolding zone"
+  
+  summary:
+    total_objects: 28
+    by_type:
+      ICON: 10
+      COMP: 8
+      AREA: 14
+      LABEL: 2
+
+confidence_levels:
+  (0.75-0.95): "Clear visual match with schema definition"
+  (0.50-0.75): "Probable match but ambiguous features"
+  (0.05-0.50): "Uncertain, requires user confirmation"
+
+evidence_types:
+  visual: "What the element looks like (shape, icon, diagram)"
+  textual: "Any readable text within or labeling the element"
+  spatial: "Location context (near entrance, within zone, etc.)"
+  color: "Highlight color if present"
+
+## Color Identification Schema
+
+color_semantics:
+
+  orange_highlight:
+      meaning: LABEL
+      target_type: LABEL__*
+      rule: 
+        If (there are x orange highlights) {
+          infer x candidates of type LABEL__*
+        }
+      example: 
+        - "If 3 orange highlights are present, infer LABEL__A, LABEL__B, LABEL__C in their relevant areas."
+
+  green_highlight:
+      meaning: Dot zone area 
+      target_type: AREA_DotZone__*
+      rule: 
+        If (there are x green highlights) {
+          infer x candidates of type AREA_DotZone__* covering the area outlined
+        }
+      example:
+        - "If 2 green highlights are present, infer AREA_DotZone__001 and AREA_DotZone__002 covering the relevant areas."
+
+  blue_highlight:
+      meaning: Square zone area
+      target_type: AREA_SquareZone__*  
+      rule: 
+        - If (there are x number of blue highlights) {
+          infer x candidates of type AREA_SquareZone__* covering the area outlined
+          }
+      example:
+        - "If 2 blue highlights are present, infer AREA_SquareZone__001 and AREA_SquareZone__002 covering the relevant areas."
+      notes:
+        - "Used to identify zone areas in a diagram which do not have the same semantics as DotZones."
+
+  purple_highlight:
+      meaning: Storage unit
+      target_type: AREA_StorageUnit__*
+      placement: "At the position of the highlighted object"
+      rule: 
+        - If (there are x number of purple highlights) {
+            infer x candidates of type AREA_StorageUnit__* objects located at the designated area/object
+          }
+      example: 
+        - "If 3 purple highlights are present, create AREA_StorageUnit__001, AREA_StorageUnit__002, AREA_StorageUnit__003 in their relevant areas."
+
+  unknown_highlight:
+      rule: "If a highlight color is detected that does not match any defined color semantic, stop and prompt the user for clarification."
+
+  connector_lines:
+    create: false
+    notes:
+      - "Flow/connector lines are currently non-semantic and must be ignored."
+
+# Object Identification Schema
+# Purpose: Map visual elements in supplied images to Illustrator file objects
+
+category_definitions:
+  label:
+    description: "Text that conveys semantic information"
+    characteristics:
+      - "Primary content is readable text"
+      - "May have thin border or no border"
+      - "Describes function, location, or contents"
+    examples: ["Team Leader", "Entry/Exit", "Pigeonholes (district)"]
+  
+  icon:
+    description: "Small symbolic graphics with conventional meaning"
+    characteristics:
+      - "Simple, recognizable symbol"
+      - "Typically small relative to overall composition"
+      - "Universally understood visual shorthand"
+    examples: ["person silhouette", "wheelchair symbol", "arrows", "envelope"]
+  
+  area:
+    description: "Shapes representing physical objects or spatial zones"
+    characteristics:
+      - "Large geometric shapes (rectangles, borders)"
+      - "Represents furniture, equipment, or boundaries"
+      - "May contain labels or icons within"
+    examples: ["tables", "room perimeter", "furniture units"]
+  
+  composition:
+    description: "Multi-element pictorial compositions depicting functional units"
+    characteristics:
+      - "Multiple connected shapes forming coherent whole"
+      - "Depicts complete functional arrangement"
+      - "More complex than single icon or area"
+    examples: ["workstation with monitors and chair", "voting compartment array"]
+
+
+classification_priority:
+  - "If element is primarily text → label"
+  - "If element is simple recognizable symbol → icon"
+  - "If element is multi-part pictorial composition → composition"
+  - "If element is geometric shape representing physical object → area"
+
+
+
+object_mapping:
+  # Team Leader
+  - match:
+      image_category: "icon"
+      description: "person within circle"
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_PeopleLeader__*"
+  
+  - match:
+      image_category: "label"
+      text_contains_any: ["leader", "team leader"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_PeopleLeader__*"
+  
+  # Staff Person
+  - match:
+      image_category: "icon"
+      description: "person"
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Staff__*"
+  
+  # Pigeonholes Region
+  - match:
+      image_category: "label"
+      text_contains_any: ["pigeonholes - region", "pigeonholes region", "region pigeonholes"]
+    target:
+      illustrator_type: "COMP"
+      illustrator_object: "COMP_RegionPigeonhole__*"
+  
+  # Pigeonholes District
+  - match:
+      image_category: "label"
+      text_contains_any: ["pigeonholes - district", "pigeonholes district", "district pigeonholes"]
+    target:
+      illustrator_type: "COMP"
+      illustrator_object: "COMP_DistrictPigeonhole__*"
+  
+  # Security Boxes
+  - match:
+      image_category: "label"
+      text_contains_any: ["security boxes", "secure storage"]
+    target:
+      illustrator_type: "COMP"
+      illustrator_object: "COMP_SecureStorageBox__*"
+  
+  # In/Out Tray
+  - match:
+      image_category: "label"
+      text_contains_any: ["tray", "in tray", "out tray"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_InOutTray__*"
+
+  # Stationery Kit
+  - match:
+      image_category: "label"
+      text_contains_any: ["stationary", "stationery", "stationery kit"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Stationary__*"
+  
+  # Form
+  - match:
+      image_category: "label"
+      text_contains_any: ["form", "forms"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Form__*"
+  
+  # Disability/Accessibility
+  - match:
+      image_category: "icon"
+      description: "wheelchair or accessibility symbol"
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Disabled__*"
+  
+  - match:
+      image_category: "label"
+      text_contains_any: ["disabled", "accessibility", "accessible"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Disabled__*"
+  
+  # Chair
+  - match:
+      image_category: "icon"
+      description: "chair"
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Chair__*"
+  
+  - match:
+      image_category: "label"
+      text_contains_any: ["chair", "seat"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Chair__*"
+  
+  # Printer/Note Counter
+  - match:
+      image_category: "icon"
+      description: "printer or note counter"
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Printer__*"
+  
+  - match:
+      image_category: "label"
+      text_contains_any: ["note counter", "printer"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Printer__*"
+  
+  # Entrance
+  - match:
+      image_category: "icon"
+      description: "entrance or doorway"
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Entrance__*"
+  
+  - match:
+      image_category: "label"
+      text_contains_any: ["entrance", "entry"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Entrance__*"
+  
+  # Exit
+  - match:
+      image_category: "icon"
+      description: "exit or doorway"
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Exit__*"
+  
+  - match:
+      image_category: "label"
+      text_contains_any: ["exit"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Exit__*"
+  
+  # Region Ballot Box
+  - match:
+      image_category: "label"
+      text_contains_any: ["region ballot box", "regional ballot box", "region BB"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_RegionBallotBox__*"
+  
+  # District Ballot Box
+  - match:
+      image_category: "label"
+      text_contains_any: ["district ballot box", "district BB"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_DistrictBallotBox__*"
+  
+  # Declaration Ballot Box
+  - match:
+      image_category: "label"
+      text_contains_any: ["declaration ballot box", "declaration envelope ballot box", "declaration BB"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_DeclarationBallotBox__*"
+  
+  # Voting Booth
+  - match:
+      image_category: "composition"
+      description: "voting booth or compartment"
+    target:
+      illustrator_type: "COMP"
+      illustrator_object: "COMP_VotingBooth__*"
+  
+  - match:
+      image_category: "label"
+      text_contains_any: ["voting booth", "booth", "voting compartment"]
+    target:
+      illustrator_type: "COMP"
+      illustrator_object: "COMP_VotingBooth__*"
+  
+  # Perimeter Boundary
+  - match:
+      image_category: "area"
+      description: "continuous line or border forming perimeter"
+      spatial_role: "boundary or wall"
+    target:
+      illustrator_type: "BOUND"
+      illustrator_object: "BOUND_Perimeter__*"
+  
+  # Publication
+  - match:
+      image_category: "icon"
+      description: "book or publication"
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Publication__*"
+  
+  - match:
+      image_category: "label"
+      text_contains_any: ["publication", "book"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Publication__*"
+  
+  # Arrow (standalone, not entrance/exit indicator)
+  - match:
+      image_category: "icon"
+      description: "arrow"
+      spatial_context: "not adjacent to entrance or exit"
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Arrow__*"
+  
+  # Computer (Desktop)
+  - match:
+      image_category: "icon"
+      description: "desktop computer or monitor"
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Computer__*"
+  
+  - match:
+      image_category: "label"
+      text_contains_any: ["computer", "desktop"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Computer__*"
+  
+  # Laptop
+  - match:
+      image_category: "icon"
+      description: "laptop computer"
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Laptop__*"
+  
+  - match:
+      image_category: "label"
+      text_contains_any: ["laptop"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Laptop__*"
+  
+  # Ballot Box (Generic)
+  - match:
+      image_category: "icon"
+      description: "ballot box or storage container"
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_BallotBox__*"
+  
+  - match:
+      image_category: "label"
+      text_contains_any: ["ballot box", "BB"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_BallotBox__*"
+  
+  # Furniture Area
+  - match:
+      image_category: "area"
+      description: "large rectangle with solid fill representing table or furniture"
+    target:
+      illustrator_type: "AREA"
+      illustrator_object: "AREA_Furniture__*"
+  
+
+
+{
+placement_and_composition_rules:
+  composites:
+    atomic_placement: true
+    child_repositioning_allowed: false
+    applies_to_prefixes: ["COMP_"]
+  icons:
+    independent_placement_allowed: true
+    applies_to_prefixes: ["ICON_"]
+  areas:
+    independent_placement_allowed: true
+    applies_to_prefixes: ["AREA_"]
+  labels:
+    orientation_rule:
+      when_label: vertical
+
+layer_rules:
+  zone_objects:
+    required_layer: "AREAS - Zones"
+    fallback_if_missing: null
+    applies_to: ["AREA_Zone__*", "BOUND__*"]
+
+naming_and_instance_rules:
+  suffix_strategy:
+    default:
+      preferred_start: "__001"
+      increment_style: zero_padded_3
+    LABEL_:
+      preferred_start: "__A"
+      increment_style: alpha_upper
+  uniqueness:
+    rule: "No two instances may share the same full name/cardinal suffix."
+    example_valid: ["ICON_Staff__001", "ICON_Staff__002"]
+    example_invalid: ["ICON_Staff__001", "ICON_Staff__001"]
+    label_examples:
+      valid: ["LABEL__A", "LABEL__B"]
+      invalid: ["LABEL__A", "LABEL__A"]
+  duplication_policy:
+    rule: "Duplicate existing instances only when resulting names remain unique."
+
+unused_assets_policy:
+  inventory_artboard: "Unused assets"
+  if_main_artboard_object_unused:
+    action: move_to_unused_assets
+    notes:
+      - "Do not delete by default."
+  deduplication_rule:
+    action: "Keep non-duplicate assets in Unused assets inventory."
+  capacity_rule:
+    when_unused_assets_too_small:
+      action: double_artboard_height
+      axis: vertical
+
+agent_output_contract:
+  phase_1_interpretation:
+    required_outputs:
+      - "Mapping table: image element -> candidate object(s) -> confidence"
+      - "Ambiguity/uncertainty list"
+  phase_2_reconstruction_plan:
+    required_outputs:
+      - "Planned add/move/remove/rename actions"
+      - "Target placements and naming assignments"
+      - "Impact on Unused assets inventory"
+  phase_3_script_generation:
+    required_outputs:
+      - "Illustrator JSX script to transform current state to approved target"
+      - "No guide/layer structural changes"
