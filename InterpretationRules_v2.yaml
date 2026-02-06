@@ -1,8 +1,10 @@
-﻿map_name: Interpretation rules v2
+# === METADATA ===
+map_name: Interpretation rules v2
 status: stable
 created: 2026-02-06
 scope: Illustrator IP diagram reconstruction from reference images
 
+# === GLOBAL RULES ===
 authoritative_sources:
   - "# Coordinate Placement Spec v1.yaml"
   - "LayoutProfile_v1.yaml"
@@ -14,102 +16,96 @@ fixed_document_rules:
   overlap_allowed: true
   strict_cell_grid_required: false
   follow_illustrator_layout_logic: true
-
-image_interpretation_rules:
-  default_behavior:
-    count_rule: "For each color highlight detected, it must correspond to one of the following objects:
-    
+   
   text_in_reference_images:
     policy: referential_only
     rule: "Do not render words/sentences from the source image unless the object is a LABEL_* object."
+# === ANALYSIS PROTOCOL ===
+# CRITICAL: Follow this exact sequence to avoid visual hierarchy bias
 
-# OUTPUT FORMAT
-# When analyzing an image, provide results in this structure:
-
-output_format:
-  per_object:
-    - candidate: "ICON_Staff__001"
-      type: "ICON"
-      confidence: "[0.5-0.95]"
-      evidence:
-        visual: "person silhouette icon"
-        textual: null
-        spatial: "left side of processing zone"
-      notes: null  # Optional clarifications
+analysis_sequence:
+  step_1_baseline_count:
+    action: "Count and catalog ALL gray rectangles first, before processing any other visual elements"
+    output_required: "List of AREA_Furniture__001 through __NNN with spatial locations"
+    rule: "Complete this step entirely before proceeding to step 2"
+    rationale: "Gray rectangles are easiest to miss when highlights/text draw attention"
   
-  color_semantics:
-    - highlight_color: "orange"
-      count: 2
-      generated_objects:
-        - "LABEL__A"
-        - "LABEL__B"
-      placement: "top-left of district unfolding zone, top-left of region unfolding zone"
+  step_2_color_semantics:
+    action: "Identify and count all color highlights (orange, green, blue, purple)"
+    output_required: "Color highlight inventory with counts"
+    rule: "Do not interpret what highlights mean yet, just count them"
   
-  summary:
-    total_objects: 28
-    by_type:
-      ICON: 10
-      COMP: 8
-      AREA: 14
-      LABEL: 2
+  step_3_icons_and_symbols:
+    action: "Identify all person icons, symbols, and simple graphics"
+    output_required: "Icon inventory with spatial locations"
+  
+  step_4_text_labels:
+    action: "Catalog all text elements and map to object types"
+    output_required: "Text-to-object mappings"
+  
+  step_5_compositions:
+    action: "Identify multi-part compositions"
+    output_required: "Composition inventory"
+  
+  step_6_cross_reference:
+    action: "Verify counts match across categories (e.g., 4 pigeonhole labels = 4 furniture units)"
+    output_required: "Consistency check report"
 
-confidence_levels:
-  (0.75-0.95): "Clear visual match with schema definition"
-  (0.50-0.75): "Probable match but ambiguous features"
-  (0.05-0.50): "Uncertain, requires user confirmation"
+# === MANDATORY CHECKS ===
+systematic_counting_rules:
+  gray_rectangles:
+    scan_pattern: "Top-to-bottom, left-to-right systematic sweep"
+    verification: "After initial count, re-scan to confirm no rectangles were visually merged or overlooked"
 
-evidence_types:
-  visual: "What the element looks like (shape, icon, diagram)"
-  textual: "Any readable text within or labeling the element"
-  spatial: "Location context (near entrance, within zone, etc.)"
-  color: "Highlight color if present"
-
-## Color Identification Schema
-
+  large_shapes_furniture:
+    scan_pattern: "Top-to-bottom, left-to-right systematic sweep"
+    identification_criteria:
+      primary: "Size and proportion (large geometric shapes)"
+      not: "Color value"
+    rule: "Each distinct large rectangle/shape = one AREA_Furniture__* object"
+    common_errors_to_avoid:
+      - "Treating multiple stacked rectangles as one unit"
+      - "Ignoring rectangles that contain other visual elements (text, highlights, icons)"
+      - "Missing rectangles in visually busy areas"
+    
+  within_highlighted_zones:
+    rule: "Color highlights (green, blue) may CONTAIN furniture/objects - always check interior"
+    example: "A green zone outline may contain 4 gray tables inside it"
+    action: "Explicitly count furniture WITHIN zone boundaries"
+  
+  baseline_before_inference:
+    rule: "Complete physical object count (furniture, icons) before mapping to semantic types (COMP, LABEL)"
+    rationale: "Prevents skipping objects that seem 'already accounted for' by text labels"
+  
+# === INPUT INTERPRETATION ===
 color_semantics:
+  template:
+    rule: "If x highlights detected → infer x candidates of specified type"
+  
+  definitions:
+    orange_highlight:
+      meaning: "LABEL"
+      target_type: "LABEL__*"
+      example_count: 3
+      example_output: ["LABEL__A", "LABEL__B", "LABEL__C"]
+    
+    green_highlight:
+      meaning: "Dot zone area"
+      target_type: "AREA_DotZone__*"
+      example_count: 2
+      example_output: ["AREA_DotZone__001", "AREA_DotZone__002"]
 
-  orange_highlight:
-      meaning: LABEL
-      target_type: LABEL__*
-      rule: 
-        If (there are x orange highlights) {
-          infer x candidates of type LABEL__*
-        }
-      example: 
-        - "If 3 orange highlights are present, infer LABEL__A, LABEL__B, LABEL__C in their relevant areas."
+    purple_highlight:
+      meaning: "Square zone area"
+      target_type: "AREA_SquareZone__*"
+      example_count: 2
+      example_output: ["AREA_SquareZone__001", "AREA_SquareZone__002"]
 
-  green_highlight:
-      meaning: Dot zone area 
-      target_type: AREA_DotZone__*
-      rule: 
-        If (there are x green highlights) {
-          infer x candidates of type AREA_DotZone__* covering the area outlined
-        }
-      example:
-        - "If 2 green highlights are present, infer AREA_DotZone__001 and AREA_DotZone__002 covering the relevant areas."
-
-  blue_highlight:
-      meaning: Square zone area
-      target_type: AREA_SquareZone__*  
-      rule: 
-        - If (there are x number of blue highlights) {
-          infer x candidates of type AREA_SquareZone__* covering the area outlined
-          }
-      example:
-        - "If 2 blue highlights are present, infer AREA_SquareZone__001 and AREA_SquareZone__002 covering the relevant areas."
-      notes:
-        - "Used to identify zone areas in a diagram which do not have the same semantics as DotZones."
-
-  purple_highlight:
-      meaning: Storage unit
-      target_type: AREA_StorageUnit__*
-      placement: "At the position of the highlighted object"
-      rule: 
-        - If (there are x number of purple highlights) {
-            infer x candidates of type AREA_StorageUnit__* objects located at the designated area/object
-          }
-      example: 
-        - "If 3 purple highlights are present, create AREA_StorageUnit__001, AREA_StorageUnit__002, AREA_StorageUnit__003 in their relevant areas."
+    blue_highlight:
+      meaning: "Storage unit area"
+      target_type: "AREA_StorageUnit__*"
+      example_count: 3
+      example_output: ["AREA_StorageUnit__001", "AREA_StorageUnit__002", "AREA_StorageUnit__003"]
 
   unknown_highlight:
       rule: "If a highlight color is detected that does not match any defined color semantic, stop and prompt the user for clarification."
@@ -133,6 +129,7 @@ category_definitions:
   
   icon:
     description: "Small symbolic graphics with conventional meaning"
+    size_characteristic: "Small relative to furniture areas"
     characteristics:
       - "Simple, recognizable symbol"
       - "Typically small relative to overall composition"
@@ -142,11 +139,20 @@ category_definitions:
   area:
     description: "Shapes representing physical objects or spatial zones"
     characteristics:
-      - "Large geometric shapes (rectangles, borders)"
+      - "Large geometric shapes (rectangles, squares)"
       - "Represents furniture, equipment, or boundaries"
       - "May contain labels or icons within"
+      - "Typically solid fill or outline"
+    visual_markers:
+      - "Solid fill"
+      - "Outlined borders"
+      - "NOT dependent on specific color value"
+    size_characteristic: "Large relative to icons/symbols"
+    critical_rule: "Count EVERY large rectangle/shape as potential furniture, regardless of fill color"
     examples: ["tables", "room perimeter", "furniture units"]
-  
+    critical_rule: "Count EVERY gray rectangle as separate furniture object, regardless of what else it contains"
+    counting_priority: 1  # Must be counted FIRST before other object types
+
   composition:
     description: "Multi-element pictorial compositions depicting functional units"
     characteristics:
@@ -254,7 +260,7 @@ object_mapping:
   # Chair
   - match:
       image_category: "icon"
-      description: "chair"
+      description: "small square or rectangle"
     target:
       illustrator_type: "ICON"
       illustrator_object: "ICON_Chair__*"
@@ -356,8 +362,8 @@ object_mapping:
       description: "continuous line or border forming perimeter"
       spatial_role: "boundary or wall"
     target:
-      illustrator_type: "BOUND"
-      illustrator_object: "BOUND_Perimeter__*"
+      illustrator_type: "PATH"
+      illustrator_object: "PATH_Perimeter__*"
   
   # Publication
   - match:
@@ -431,34 +437,63 @@ object_mapping:
   # Furniture Area
   - match:
       image_category: "area"
-      description: "large rectangle with solid fill representing table or furniture"
+      description: "large rectangle or geometric shape with solid fill or outline (any color)"
+      size_relative: "significantly larger than icons/symbols"
+      exclusions: "small squares classified as chairs"
     target:
       illustrator_type: "AREA"
       illustrator_object: "AREA_Furniture__*"
+
+# === OUTPUT SPECIFICATION ===
+# When analyzing an image, provide results in this structure:
+
+output_format:
+  step_1_furniture_baseline:
+    format: "List all AREA_Furniture__* objects with grid position BEFORE full analysis"
+    example:
+      - "AREA_Furniture__001: Top-left"
+      - "AREA_Furniture__002: Top-right"
+      - "AREA_Furniture__003: Left column, position 1"
+      - "... (continue for all gray rectangles)"
+    verification: "Total count: X furniture objects identified"
+
+  per_object:
+    - candidate: "ICON_Staff__001"
+      type: "ICON"
+      confidence: "high"
+      evidence:
+        # evidence_types:
+        # - visual: "What the element looks like (shape, icon, diagram)"
+        # - textual: "Any readable text within or labeling the element"
+        # - spatial: "Location context (near entrance, within zone, etc.)"
+        # - color: "Highlight color if present"
+        visual: "person silhouette icon"
+        textual: null
+        spatial: "left side of processing zone"
+      notes: null  # Optional clarifications
   
+  color_semantics:
+    - highlight_color: "orange"
+      count: 2
+      generated_objects:
+        - "LABEL__A"
+        - "LABEL__B"
+      placement: "top-left of district unfolding zone, top-left of region unfolding zone"
+  
+  summary:
+    total_objects: 28
+    by_type:
+      ICON: 10
+      COMP: 8
+      AREA: 14
+      LABEL: 2
+      PATH: 0
 
+confidence_definitions:
+  high: "Clear visual match with schema definition"
+  medium: "Probable match but ambiguous features"
+  low: "Uncertain, requires user confirmation"
 
-{
-placement_and_composition_rules:
-  composites:
-    atomic_placement: true
-    child_repositioning_allowed: false
-    applies_to_prefixes: ["COMP_"]
-  icons:
-    independent_placement_allowed: true
-    applies_to_prefixes: ["ICON_"]
-  areas:
-    independent_placement_allowed: true
-    applies_to_prefixes: ["AREA_"]
-  labels:
-    orientation_rule:
-      when_label: vertical
-
-layer_rules:
-  zone_objects:
-    required_layer: "AREAS - Zones"
-    fallback_if_missing: null
-    applies_to: ["AREA_Zone__*", "BOUND__*"]
 
 naming_and_instance_rules:
   suffix_strategy:
@@ -468,40 +503,6 @@ naming_and_instance_rules:
     LABEL_:
       preferred_start: "__A"
       increment_style: alpha_upper
+  
   uniqueness:
     rule: "No two instances may share the same full name/cardinal suffix."
-    example_valid: ["ICON_Staff__001", "ICON_Staff__002"]
-    example_invalid: ["ICON_Staff__001", "ICON_Staff__001"]
-    label_examples:
-      valid: ["LABEL__A", "LABEL__B"]
-      invalid: ["LABEL__A", "LABEL__A"]
-  duplication_policy:
-    rule: "Duplicate existing instances only when resulting names remain unique."
-
-unused_assets_policy:
-  inventory_artboard: "Unused assets"
-  if_main_artboard_object_unused:
-    action: move_to_unused_assets
-    notes:
-      - "Do not delete by default."
-  deduplication_rule:
-    action: "Keep non-duplicate assets in Unused assets inventory."
-  capacity_rule:
-    when_unused_assets_too_small:
-      action: double_artboard_height
-      axis: vertical
-
-agent_output_contract:
-  phase_1_interpretation:
-    required_outputs:
-      - "Mapping table: image element -> candidate object(s) -> confidence"
-      - "Ambiguity/uncertainty list"
-  phase_2_reconstruction_plan:
-    required_outputs:
-      - "Planned add/move/remove/rename actions"
-      - "Target placements and naming assignments"
-      - "Impact on Unused assets inventory"
-  phase_3_script_generation:
-    required_outputs:
-      - "Illustrator JSX script to transform current state to approved target"
-      - "No guide/layer structural changes"
