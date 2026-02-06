@@ -1,4 +1,4 @@
-# Phase2_ConstructionPlanProtocol_v1.yaml
+# CONSTRUCTION_PLANNING_PROTOCOL.yaml
 # Protocol for creating a plan to transform current Illustrator document state to match target image
 
 # === METADATA ===
@@ -146,4 +146,165 @@ position_strategies:
     use_when: "Grid coordinates unclear, approximate positioning acceptable"
   
   contained:
-    d
+    description: "Positioned within parent object"
+    format: {parent: "AREA_Furniture__001", position: "center" | "top_left" | etc}
+    use_when: "Icon/label belongs inside furniture/area"
+
+# === DEPENDENCY RESOLUTION ===
+
+dependency_rules:
+  parent_before_child:
+    rule: "If object A contains object B, ADD object A before ADD object B"
+    example: "ADD AREA_Furniture__001 before ADD ICON_InOutTray__001 (contained within)"
+  
+  reference_validity:
+    rule: "If object A references object B (adjacent_to, relative_to), object B must exist first"
+    example: "ADD AREA_Furniture__002 before ADD ICON_Chair__001 (positioned relative to furniture)"
+  
+  remove_children_first:
+    rule: "If removing parent object, remove or relocate children first"
+    example: "REMOVE ICON_InOutTray__001 before REMOVE AREA_Furniture__001 (if not moving to unused)"
+
+# === OUTPUT FORMAT ===
+
+construction_plan_output:
+  format: |
+    # Construction Plan
+    
+    ## Document State Comparison
+    
+    **Current state**: [X] objects
+    **Target state**: [Y] objects
+    **Net change**: [±Z] objects
+    
+    ### Objects by Operation Type:
+    - **ADD**: [N] objects
+    - **REMOVE**: [N] objects
+    - **MOVE**: [N] objects
+    - **RENAME**: [N] objects
+    - **KEEP**: [N] objects (no action required)
+    
+    ---
+    
+    ## Sequenced Operations Plan
+    
+    ### Phase A: Remove Operations
+    1. REMOVE ICON_Staff__005 → Move to unused artboard
+    2. REMOVE AREA_Furniture__010 → Move to unused artboard
+    [Continue...]
+    
+    ### Phase B: Add Parent Objects
+    1. ADD AREA_Furniture__002
+       - Type: AREA, Subtype: furniture
+       - Layer: "Furniture"
+       - Position: Grid [1, 1]
+       - Source: Library symbol "Table_Standard"
+    [Continue...]
+    
+    ### Phase C: Add Child Objects
+    1. ADD ICON_Chair__001
+       - Type: ICON, Subtype: chair
+       - Layer: "Icons"
+       - Position: Relative to AREA_Furniture__002, offset [0, -50], anchor "top_center"
+       - Source: Library symbol "Chair_Standard"
+    [Continue...]
+    
+    ### Phase D: Move Operations
+    1. MOVE AREA_Furniture__003
+       - From: [100, 200]
+       - To: [150, 300]
+    [Continue...]
+    
+    ### Phase E: Rename Operations
+    1. RENAME ICON_Staff__003 → ICON_Staff__001
+    [Continue...]
+    
+    ---
+    
+    ## Validation Checks
+    
+    ✓ No circular dependencies detected
+    ✓ All parent objects added before children
+    ✓ All position references valid
+    ✓ Final object count matches checkpoint: [Y] objects
+    ⚠️ [Any warnings]
+    
+    ---
+    
+    **Operations total**: [N] operations across [M] phases
+    **Estimated complexity**: Low | Medium | High
+
+# === VALIDATION RULES ===
+
+validation_checks:
+  dependency_check:
+    rule: "Verify no operation depends on an operation that comes later"
+    method: "For each ADD with parent/relative_to, confirm referenced object added earlier or exists already"
+  
+  count_reconciliation:
+    rule: "Final object count = current count - removes + adds"
+    method: "Calculate: (current_total - REMOVE_count + ADD_count) = checkpoint_total"
+  
+  duplicate_prevention:
+    rule: "No two operations create same object_id"
+    method: "Check all ADD operations for unique object_ids"
+  
+  layer_validity:
+    rule: "All target_layer references must exist in document"
+    method: "Cross-reference layer names against document_state.json layer list"
+  
+  position_reference_validity:
+    rule: "All relative_to and parent references must be valid object_ids"
+    method: "Verify referenced objects exist in current_state OR will be added earlier in sequence"
+
+# === ERROR HANDLING ===
+
+common_issues:
+  missing_library_symbols:
+    detection: "Source library path does not exist"
+    resolution: "Flag operation, suggest using existing similar object or manual creation"
+  
+  layer_not_found:
+    detection: "Target layer does not exist in document"
+    resolution: "Either create layer OR default to existing layer (specify which)"
+  
+  circular_dependency:
+    detection: "Object A requires B, B requires A"
+    resolution: "Reorder operations OR flag for user clarification"
+  
+  position_ambiguity:
+    detection: "No clear positioning strategy for object"
+    resolution: "Default to semantic positioning, flag for user review"
+
+# === ASSUMPTIONS & CONSTRAINTS ===
+
+assumptions:
+  - "Illustrator document structure (guides, layers) remains unchanged per fixed_document_rules"
+  - "Library symbols/components are available in accessible location"
+  - "Document state export is accurate and complete"
+  - "Image remains in agent context from Phase 1"
+
+constraints:
+  - "No modifications to document guides"
+  - "No layer structure changes"
+  - "Object overlap is allowed per fixed_document_rules"
+  - "Follow Illustrator layout logic per fixed_document_rules"
+
+# === PLANNING PRINCIPLES ===
+
+principles:
+  minimalism:
+    rule: "Prefer minimal operations - if object can be reused/renamed, prefer that over remove+add"
+    example: "If document has ICON_Staff__003 but needs ICON_Staff__001, use RENAME not REMOVE+ADD"
+  
+  preservation:
+    rule: "Move removed objects to unused artboard, don't permanently delete (unless user specifies)"
+    rationale: "Allows recovery if plan was incorrect"
+  
+  explicitness:
+    rule: "Every operation must have complete parameters - no implicit assumptions"
+    example: "ADD operations must specify layer, position strategy, and source"
+  
+  verifiability:
+    rule: "Plan must be mechanically verifiable before script generation"
+    method: "All validation checks must pass before Phase 2 QA"
