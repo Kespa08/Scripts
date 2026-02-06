@@ -30,7 +30,7 @@ inputs:
   - construction_protocol
 
 process:
-  2.1) AI analyzes: checkpoint vs document_state
+  2.1) AI maps: checkpoint ID's to their corresponding document_state objects.
   2.2) AI creates construction_plan (markdown with operations list)
   2.3) User QA review
   2.4) If FAIL:
