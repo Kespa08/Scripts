@@ -1,0 +1,519 @@
+﻿# === METADATA ===
+protocol_name: Interpretation rules v2
+status: stable
+created: 2026-02-06
+scope: Illustrator IP diagram reconstruction from reference images
+
+# === GLOBAL RULES ===
+authoritative_sources:
+  - "# Coordinate Placement Spec v1.yaml"
+  - "LayoutProfile_v1.yaml"
+  - "User-confirmed mapping decisions (2026-02-04)"
+
+fixed_document_rules:
+  keep_guides_unchanged: true
+  keep_layers_unchanged: true
+  overlap_allowed: true
+  strict_cell_grid_required: false
+  follow_illustrator_layout_logic: true
+   
+  text_in_reference_images:
+    policy: referential_only
+    rule: "Do not render words/sentences from the source image unless the object is a LABEL_* object."
+
+# === ANALYSIS PROTOCOL ===
+# CRITICAL: Follow this exact sequence to avoid visual hierarchy bias
+
+analysis_sequence:
+  step_1_baseline_count:
+    action: "Count and catalog ALL gray rectangles first, before processing any other visual elements"
+    output_required: "List of AREA_Furniture__001 through __NNN with spatial locations"
+    rule: "Complete this step entirely before proceeding to step 2"
+    rationale: "Gray rectangles are easiest to miss when highlights/text draw attention"
+  
+  step_2_color_semantics:
+    action: "Identify and count all color highlights (orange, green, blue, purple)"
+    output_required: "Color highlight inventory with counts"
+    rule: "Do not interpret what highlights mean yet, just count them"
+  
+  step_3_icons_and_symbols:
+    action: "Identify all person icons, symbols, and simple graphics"
+    output_required: "Icon inventory with spatial locations"
+  
+  step_4_text_labels:
+    action: "Catalog all text elements and map to object types"
+    output_required: "Text-to-object mappings"
+  
+  step_5_compositions:
+    action: "Identify multi-part compositions"
+    output_required: "Composition inventory"
+  
+  step_6_cross_reference:
+    action: "Verify counts match across categories (e.g., 4 pigeonhole labels = 4 furniture units)"
+    output_required: "Consistency check report"
+
+# === MANDATORY CHECKS ===
+systematic_counting_rules:
+  gray_rectangles:
+    scan_pattern: "Top-to-bottom, left-to-right systematic sweep"
+    verification: "After initial count, re-scan to confirm no rectangles were visually merged or overlooked"
+
+  large_shapes_furniture:
+    scan_pattern: "Top-to-bottom, left-to-right systematic sweep"
+    identification_criteria:
+      primary: "Size and proportion (large geometric shapes)"
+      not: "Color value"
+    rule: "Each distinct large rectangle/shape = one AREA_Furniture__* object"
+    common_errors_to_avoid:
+      - "Treating multiple stacked rectangles as one unit"
+      - "Ignoring rectangles that contain other visual elements (text, highlights, icons)"
+      - "Missing rectangles in visually busy areas"
+    
+  within_highlighted_zones:
+    rule: "Color highlights (green, blue) may CONTAIN furniture/objects - always check interior"
+    example: "A green zone outline may contain 4 gray tables inside it"
+    action: "Explicitly count furniture WITHIN zone boundaries"
+  
+  baseline_before_inference:
+    rule: "Complete physical object count (furniture, icons) before mapping to semantic types (COMP, LABEL)"
+    rationale: "Prevents skipping objects that seem 'already accounted for' by text labels"
+  
+# === INPUT INTERPRETATION ===
+color_semantics:
+  template:
+    rule: "If x highlights detected → infer x candidates of specified type"
+  
+  definitions:
+    orange_highlight:
+      meaning: "LABEL"
+      target_type: "LABEL__*"
+      example_count: 3
+      example_output: ["LABEL__A", "LABEL__B", "LABEL__C"]
+    
+    green_highlight:
+      meaning: "Dot zone area"
+      target_type: "AREA_DotZone__*"
+      example_count: 2
+      example_output: ["AREA_DotZone__001", "AREA_DotZone__002"]
+
+    purple_highlight:
+      meaning: "Square zone area"
+      target_type: "AREA_SquareZone__*"
+      example_count: 2
+      example_output: ["AREA_SquareZone__001", "AREA_SquareZone__002"]
+
+    blue_highlight:
+      meaning: "Storage unit area"
+      target_type: "AREA_StorageUnit__*"
+      example_count: 3
+      example_output: ["AREA_StorageUnit__001", "AREA_StorageUnit__002", "AREA_StorageUnit__003"]
+
+  unknown_highlight:
+      rule: "If a highlight color is detected that does not match any defined color semantic, stop and prompt the user for clarification."
+
+  connector_lines:
+    create: false
+    notes:
+      - "Flow/connector lines are currently non-semantic and must be ignored."
+
+# Object Identification Schema
+# Purpose: Map visual elements in supplied images to Illustrator file objects
+
+category_definitions:
+  label:
+    description: "Text that conveys semantic information"
+    characteristics:
+      - "Primary content is readable text"
+      - "May have thin border or no border"
+      - "Describes function, location, or contents"
+    examples: ["Team Leader", "Entry/Exit", "Pigeonholes (district)"]
+  
+  icon:
+    description: "Small symbolic graphics with conventional meaning"
+    size_characteristic: "Small relative to furniture areas"
+    characteristics:
+      - "Simple, recognizable symbol"
+      - "Typically small relative to overall composition"
+      - "Universally understood visual shorthand"
+    examples: ["person silhouette", "wheelchair symbol", "arrows", "envelope"]
+  
+  area:
+    description: "Shapes representing physical objects or spatial zones"
+    characteristics:
+      - "Large geometric shapes (rectangles, squares)"
+      - "Represents furniture, equipment, or boundaries"
+      - "May contain labels or icons within"
+      - "Typically solid fill or outline"
+    visual_markers:
+      - "Solid fill"
+      - "Outlined borders"
+      - "NOT dependent on specific color value"
+    size_characteristic: "Large relative to icons/symbols"
+    critical_rule: "Count EVERY large rectangle/shape as potential furniture, regardless of fill color"
+    examples: ["tables", "room perimeter", "furniture units"]
+    critical_rule: "Count EVERY gray rectangle as separate furniture object, regardless of what else it contains"
+    counting_priority: 1  # Must be counted FIRST before other object types
+
+  composition:
+    description: "Multi-element pictorial compositions depicting functional units"
+    characteristics:
+      - "Multiple connected shapes forming coherent whole"
+      - "Depicts complete functional arrangement"
+      - "More complex than single icon or area"
+    examples: ["workstation with monitors and chair", "voting compartment array"]
+
+
+classification_priority:
+  - "If element is primarily text → label"
+  - "If element is simple recognizable symbol → icon"
+  - "If element is multi-part pictorial composition → composition"
+  - "If element is geometric shape representing physical object → area"
+
+
+
+object_mapping:
+  # Team Leader
+  - match:
+      image_category: "icon"
+      description: "person within circle"
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_PeopleLeader__*"
+  
+  - match:
+      image_category: "label"
+      text_contains_any: ["leader", "team leader"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_PeopleLeader__*"
+  
+  # Staff Person
+  - match:
+      image_category: "icon"
+      description: "person"
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Staff__*"
+  
+  # Pigeonholes Region
+  - match:
+      image_category: "label"
+      text_contains_any: ["pigeonholes - region", "pigeonholes region", "region pigeonholes"]
+    target:
+      illustrator_type: "COMP"
+      illustrator_object: "COMP_RegionPigeonhole__*"
+  
+  # Pigeonholes District
+  - match:
+      image_category: "label"
+      text_contains_any: ["pigeonholes - district", "pigeonholes district", "district pigeonholes"]
+    target:
+      illustrator_type: "COMP"
+      illustrator_object: "COMP_DistrictPigeonhole__*"
+  
+  # Security Boxes
+  - match:
+      image_category: "label"
+      text_contains_any: ["security boxes", "secure storage"]
+    target:
+      illustrator_type: "COMP"
+      illustrator_object: "COMP_SecureStorageBox__*"
+  
+  # In/Out Tray
+  - match:
+      image_category: "label"
+      text_contains_any: ["tray", "in tray", "out tray"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_InOutTray__*"
+
+  # Stationery Kit
+  - match:
+      image_category: "label"
+      text_contains_any: ["stationary", "stationery", "stationery kit"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Stationary__*"
+  
+  # Form
+  - match:
+      image_category: "label"
+      text_contains_any: ["form", "forms"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Form__*"
+  
+  # Disability/Accessibility
+  - match:
+      image_category: "icon"
+      description: "wheelchair or accessibility symbol"
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Disabled__*"
+  
+  - match:
+      image_category: "label"
+      text_contains_any: ["disabled", "accessibility", "accessible"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Disabled__*"
+  
+  # Chair
+  - match:
+      image_category: "icon"
+      description: "small square or rectangle"
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Chair__*"
+  
+  - match:
+      image_category: "label"
+      text_contains_any: ["chair", "seat"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Chair__*"
+  
+  # Printer/Note Counter
+  - match:
+      image_category: "icon"
+      description: "printer or note counter"
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Printer__*"
+  
+  - match:
+      image_category: "label"
+      text_contains_any: ["note counter", "printer"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Printer__*"
+  
+  # Entrance
+  - match:
+      image_category: "icon"
+      description: "entrance or doorway"
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Entrance__*"
+  
+  - match:
+      image_category: "label"
+      text_contains_any: ["entrance", "entry"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Entrance__*"
+  
+  # Exit
+  - match:
+      image_category: "icon"
+      description: "exit or doorway"
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Exit__*"
+  
+  - match:
+      image_category: "label"
+      text_contains_any: ["exit"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Exit__*"
+  
+  # Region Ballot Box
+  - match:
+      image_category: "label"
+      text_contains_any: ["region ballot box", "regional ballot box", "region BB"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_RegionBallotBox__*"
+  
+  # District Ballot Box
+  - match:
+      image_category: "label"
+      text_contains_any: ["district ballot box", "district BB"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_DistrictBallotBox__*"
+  
+  # Declaration Ballot Box
+  - match:
+      image_category: "label"
+      text_contains_any: ["declaration ballot box", "declaration envelope ballot box", "declaration BB"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_DeclarationBallotBox__*"
+  
+  # Envelopes
+  - match:
+      image_category: "icon"
+      description: "envelope"
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Envelope__*"
+
+  # Voting Booth
+  - match:
+      image_category: "composition"
+      description: "voting booth or compartment"
+    target:
+      illustrator_type: "COMP"
+      illustrator_object: "COMP_VotingBooth__*"
+  
+  - match:
+      image_category: "label"
+      text_contains_any: ["voting booth", "booth", "voting compartment"]
+    target:
+      illustrator_type: "COMP"
+      illustrator_object: "COMP_VotingBooth__*"
+  
+  # Perimeter Boundary
+  - match:
+      image_category: "area"
+      description: "continuous line or border forming perimeter"
+      spatial_role: "boundary or wall"
+    target:
+      illustrator_type: "PATH"
+      illustrator_object: "PATH_Perimeter__*"
+  
+  # Publication
+  - match:
+      image_category: "icon"
+      description: "book or publication"
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Publication__*"
+  
+  - match:
+      image_category: "label"
+      text_contains_any: ["publication", "book"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Publication__*"
+  
+  # Arrow (standalone, not entrance/exit indicator)
+  - match:
+      image_category: "icon"
+      description: "arrow"
+      spatial_context: "not adjacent to entrance or exit"
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Arrow__*"
+  
+  # Computer (Desktop)
+  - match:
+      image_category: "icon"
+      description: "desktop computer or monitor"
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Computer__*"
+  
+  - match:
+      image_category: "label"
+      text_contains_any: ["computer", "desktop"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Computer__*"
+  
+  # Laptop
+  - match:
+      image_category: "icon"
+      description: "laptop computer"
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Laptop__*"
+  
+  - match:
+      image_category: "label"
+      text_contains_any: ["laptop"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_Laptop__*"
+  
+  # Ballot Box (Generic)
+  - match:
+      image_category: "icon"
+      description: "ballot box or storage container"
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_BallotBox__*"
+  
+  - match:
+      image_category: "label"
+      text_contains_any: ["ballot box", "BB"]
+    target:
+      illustrator_type: "ICON"
+      illustrator_object: "ICON_BallotBox__*"
+  
+  # Furniture Area
+  - match:
+      image_category: "area"
+      description: "large rectangle or geometric shape with solid fill or outline (any color)"
+      size_relative: "significantly larger than icons/symbols"
+      exclusions: "small squares classified as chairs"
+    target:
+      illustrator_type: "AREA"
+      illustrator_object: "AREA_Furniture__*"
+
+# === OUTPUT SPECIFICATION ===
+# When analyzing an image, provide results in this structure:
+
+# === OUTPUT SPECIFICATION ===
+# When analyzing an image, provide results in this exact structure:
+
+output_format:
+  structure: |
+    # Image Analysis Output
+    
+    I've analyzed the image according to the provided rules. Here's the interpretation:
+    
+    ## Color Semantics Detected
+    
+    [For each color type detected, list count and generated objects]
+    
+    1. **[Color] highlight ([count])**:
+       - [Description/location] → Create `[OBJECT_NAME]` [additional context]
+       - [Repeat for each instance of this color]
+    
+    2. **[Next color] highlights ([count])**:
+       - [Instance descriptions with object names]
+    
+    ## Object Identification
+    
+    ### Icons
+    - **[ICON_Name__001]**: [Visual description] at/on/in [spatial location]
+    - [Continue for all icons]
+    
+    ### Labels (Text Elements)
+    - **"[Text content]"**: Maps to [OBJECT_NAME]
+    - [Note if text is referential only vs LABEL object]
+    - [Continue for all text elements]
+    
+    ### Compositions
+    - **"[Text description]"** ([spatial location]): [COMP_Name__001]
+    - [Continue for all compositions]
+    
+    ### Areas
+    - **[AREA_Name__001]**: [Shape description] at [spatial location] ([functional note if relevant])
+    - [Continue for all areas]
+    
+    ---
+    
+    **Total objects identified: [N]** ([X] icons, [Y] compositions, [Z] areas, [W] labels)
+
+  rules:
+    - Section order: Color Semantics → Icons → Labels → Compositions → Areas → Summary
+    - Bold: Object names, quoted text, color types, totals
+    - Backticks: Object names in creation context (`LABEL__A`)
+    - Spatial terms: ["at bottom center", "on left side", "top-right", "within [zone]"]
+    - Summary: Horizontal rule (---) before total
+
+naming_and_instance_rules:
+  suffix_strategy:
+    default:
+      preferred_start: "__001"
+      increment_style: zero_padded_3
+    LABEL_:
+      preferred_start: "__A"
+      increment_style: alpha_upper
+  
+  uniqueness:
+    rule: "No two instances may share the same full name/cardinal suffix."
