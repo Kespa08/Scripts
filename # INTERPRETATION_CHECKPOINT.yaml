@@ -1,0 +1,58 @@
+# INTERPRETATION_CHECKPOINT.yaml
+# Approved object inventory for construction planning stage
+
+checkpoint_metadata:
+  image_id: ""  # e.g., "diagram_2026-02-06_v3"
+  qa_status: ""  # PASSED | APPROVED_WITH_CORRECTIONS
+  qa_timestamp: ""  # ISO 8601 format
+  total_objects: 0
+
+# APPROVED OBJECT INVENTORY
+# Simple list of confirmed object IDs by type
+objects:
+  AREA: []
+    # Example: [AREA_Furniture__001, AREA_Furniture__002, AREA_StorageUnit__001]
+  
+  ICON: []
+    # Example: [ICON_Chair__001, ICON_Staff__001, ICON_PeopleLeader__001]
+  
+  COMP: []
+    # Example: [COMP_RegionPigeonhole__001, COMP_VotingBooth__001]
+  
+  LABEL: []
+    # Example: [LABEL__A, LABEL__B, LABEL__C]
+  
+  PATH: []
+    # Example: [PATH_Perimeter__001]
+
+# COLOR ZONE MAPPING
+# Objects generated from color highlights
+color_zones:
+  orange: []  # LABEL objects
+  green: []   # AREA_DotZone objects
+  blue: []    # AREA_StorageUnit objects
+  purple: []  # AREA_SquareZone objects
+
+# GROUPINGS (if identified)
+# Optional: Major spatial groupings for construction reference
+groups: {}
+  # Example:
+  # workstation_grid: [AREA_Furniture__002, AREA_Furniture__003, AREA_Furniture__004, AREA_Furniture__005]
+  # chair_array: [ICON_Chair__001, ICON_Chair__002, ICON_Chair__003, ICON_Chair__004]
+
+# QA CORRECTIONS (if any)
+corrections: []
+  # Example:
+  # - original: "AREA_Furniture__008"
+  #   corrected_to: "ICON_Chair__009"
+  #   reason: "Small unit is chair, not furniture"
+
+# COUNTS (for verification)
+counts:
+  total: 0
+  by_type:
+    AREA: 0
+    ICON: 0
+    COMP: 0
+    LABEL: 0
+    PATH: 0
