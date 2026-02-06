@@ -1,0 +1,149 @@
+# Phase2_ConstructionPlanProtocol_v1.yaml
+# Protocol for creating a plan to transform current Illustrator document state to match target image
+
+# === METADATA ===
+protocol_name: "Construction Planning Protocol"
+version: "1.0"
+created: "2026-02-06"
+purpose: "Generate actionable plan to reconfigure Illustrator document based on interpretation checkpoint"
+
+# === INPUTS REQUIRED ===
+required_inputs:
+  - interpretation_checkpoint.yaml  # Approved object inventory from Phase 1
+  - illustrator_document_state.json  # Current state export from .ai file
+  - stakeholder_image  # Reference image (in context from Phase 1)
+  - construction_planning_protocol.yaml  # This file
+
+# === PLANNING SEQUENCE ===
+planning_sequence:
+  step_1_load_state:
+    action: "Load and parse current Illustrator document state"
+    output: "Inventory of existing objects in document"
+    extract:
+      - "All object names and their types (AREA_*, ICON_*, COMP_*, LABEL_*, PATH_*)"
+      - "Layer assignments"
+      - "Current positions (if available)"
+    
+  step_2_compare:
+    action: "Compare current state vs. target checkpoint"
+    method: "Set theory operations (required - current = to_add, current - required = to_remove)"
+    output: "Three lists: objects_to_add, objects_to_remove, objects_to_keep"
+    
+  step_3_categorize_operations:
+    action: "Determine operation type for each object change"
+    operations:
+      ADD: "Object exists in checkpoint but not in current document"
+      REMOVE: "Object exists in current document but not in checkpoint"
+      RENAME: "Similar object exists but with different name/number"
+      MOVE: "Object exists with correct name but wrong position (if positional data available)"
+      KEEP: "Object exists in both with correct name"
+    output: "Categorized operation lists"
+  
+  step_4_sequence_operations:
+    action: "Order operations to avoid dependency conflicts"
+    rules:
+      - "REMOVE operations first (clear space)"
+      - "ADD parent objects before child objects (e.g., AREA_Furniture before contained ICON)"
+      - "ADD operations for standalone objects"
+      - "MOVE operations after ADD (requires objects to exist)"
+      - "RENAME operations last (cosmetic)"
+    output: "Sequenced operation plan"
+  
+  step_5_specify_parameters:
+    action: "Add implementation details to each operation"
+    parameters:
+      ADD:
+        - object_id: "ICON_Chair__001"
+        - source_library: "path/to/library/Chair.ai"  # Where to get the symbol/component
+        - target_layer: "Icons"  # Which layer to place on
+        - position: "relative_to: AREA_Furniture__002, offset: [0, -50]"  # Positioning logic
+      
+      REMOVE:
+        - object_id: "ICON_Staff__005"
+        - move_to_unused: true  # Move to unused artboard vs permanent delete
+      
+      MOVE:
+        - object_id: "AREA_Furniture__003"
+        - from_position: [100, 200]
+        - to_position: [150, 300]
+      
+      RENAME:
+        - from: "ICON_Staff__003"
+        - to: "ICON_Staff__001"
+    output: "Fully specified operation list"
+  
+  step_6_validate:
+    action: "Check plan for logical consistency"
+    checks:
+      - "No circular dependencies (A requires B, B requires A)"
+      - "All referenced objects exist (parent, adjacent_to references are valid)"
+      - "Operation count matches diff (if removing 5 and adding 3, net change = -2)"
+      - "No duplicate object IDs in final state"
+    output: "Validation report with any warnings"
+
+# === OPERATION SPECIFICATIONS ===
+
+operation_types:
+  ADD:
+    required_params:
+      - object_id: "Target object name (e.g., ICON_Chair__001)"
+      - object_type: "AREA | ICON | COMP | LABEL | PATH"
+      - target_layer: "Layer name in Illustrator"
+    optional_params:
+      - source_library: "Path to library file containing symbol/component"
+      - position_strategy: "absolute | relative | grid_based | semantic"
+      - position_params: "Coordinates or relative positioning data"
+      - parent_object: "If contained within another object"
+      - styling: "Fill color, stroke, opacity, etc."
+    
+  REMOVE:
+    required_params:
+      - object_id: "Object to remove"
+    optional_params:
+      - move_to_unused: true  # Move to unused artboard instead of delete
+      - archive: true  # Keep reference copy
+    
+  MOVE:
+    required_params:
+      - object_id: "Object to relocate"
+      - target_position: "New position"
+    optional_params:
+      - from_position: "Current position (for validation)"
+      - position_strategy: "How to calculate target position"
+    
+  RENAME:
+    required_params:
+      - current_name: "Existing object name"
+      - new_name: "Target object name"
+    note: "Only changes name/suffix, does not modify visual appearance"
+    
+  KEEP:
+    required_params:
+      - object_id: "Object to leave unchanged"
+    note: "No action required, listed for completeness"
+
+# === POSITIONING STRATEGIES ===
+
+position_strategies:
+  absolute:
+    description: "Exact pixel coordinates"
+    format: {x: 100, y: 200}
+    use_when: "Precise placement known"
+  
+  relative:
+    description: "Position relative to another object"
+    format: {relative_to: "AREA_Furniture__002", offset: [0, -50], anchor: "top_center"}
+    use_when: "Object should be positioned near/around another object"
+  
+  grid_based:
+    description: "Position in logical grid"
+    format: {grid_cell: [2, 3], alignment: "center"}
+    use_when: "Objects align to implicit grid structure"
+  
+  semantic:
+    description: "Named positions"
+    format: {position: "top_left" | "center" | "bottom_right"}
+    use_when: "Grid coordinates unclear, approximate positioning acceptable"
+  
+  contained:
+    d
