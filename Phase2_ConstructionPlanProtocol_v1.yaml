@@ -17,7 +17,7 @@ required_inputs:
 # === PLANNING SEQUENCE ===
 planning_sequence:
   step_1_load_state:
-    action: "Load and parse current Illustrator document state"
+    action: "Load and parse current Illustrator document state file"
     output: "Inventory of existing objects in document"
     extract:
       - "All object names and their types (AREA_*, ICON_*, COMP_*, LABEL_*, PATH_*)"
@@ -25,9 +25,38 @@ planning_sequence:
       - "Current positions (if available)"
     
   step_2_compare:
-    action: "Compare current state vs. target checkpoint"
-    method: "Set theory operations (required - current = to_add, current - required = to_remove)"
-    output: "Three lists: objects_to_add, objects_to_remove, objects_to_keep"
+    action: "map identified objects from phase 1 to their corresponding objects in the illustrator document"
+    method: ??? Not sure what the best method is. 
+    output: "one to one mappings."
+    rule: 
+    - rule1: SAME_NAME_IMPLIES_IDENTITY:
+        forall:
+          x: checkpoint_item
+          y: illustrator_object
+        if:
+          - same_name(x, y)
+        then:
+          - x == y
+    - rule2:
+      - name: ALIGN_OBJECT_COUNTS_BY_NAME
+        
+        condition:
+          - same_name(checkpoint_item, illustrator_object)
+          - count(illustrator_object) != count(checkpoint_item)
+        
+        action:
+          - if: count(illustrator_object) < count(checkpoint_item)
+            then:
+              - duplicate:
+                  target: illustrator_object
+                  count: "count(checkpoint_item) - count(illustrator_object)"
+          
+          - if: count(illustrator_object) > count(checkpoint_item)
+            then:
+              - remove:
+                  target: illustrator_object
+                  count: "count(illustrator_object) - count(checkpoint_item)"
+                  strategy: "last_created"  # or "first_created", "random", etc.
     
   step_3_categorize_operations:
     action: "Determine operation type for each object change"
@@ -308,3 +337,4 @@ principles:
   verifiability:
     rule: "Plan must be mechanically verifiable before script generation"
     method: "All validation checks must pass before Phase 2 QA"
+
