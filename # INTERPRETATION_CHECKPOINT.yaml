@@ -8,22 +8,46 @@ checkpoint_metadata:
   total_objects: 0
 
 # APPROVED OBJECT INVENTORY
-# Simple list of confirmed object IDs by type
+# Each object includes an ID and spatial hints for Phase 2 construction planning.
+# Spatial hints reduce information entropy at the Phase 1→2 boundary by preserving
+# the agent's spatial interpretation so positions don't need to be re-derived from the image.
+
 objects:
   AREA: []
-    # Example: [AREA_Furniture__001, AREA_Furniture__002, AREA_StorageUnit__001]
-  
+    # Example:
+    # - id: AREA_Furniture__001
+    #   cell_hint: "C1:F2"          # Approximate cell range from image analysis
+    #   spatial_note: "top center, large table spanning 4 columns"
+    # - id: AREA_Furniture__002
+    #   cell_hint: "F1:H2"
+    #   spatial_note: "top right, adjacent to AREA_Furniture__001"
+
   ICON: []
-    # Example: [ICON_Chair__001, ICON_Staff__001, ICON_PeopleLeader__001]
-  
+    # Example:
+    # - id: ICON_Staff__001
+    #   cell_hint: "G4"
+    #   spatial_note: "right side of workstation grid, row 4"
+    # - id: ICON_Chair__001
+    #   cell_hint: "E5"
+    #   spatial_note: "within workstation grid"
+
   COMP: []
-    # Example: [COMP_RegionPigeonhole__001, COMP_VotingBooth__001]
-  
+    # Example:
+    # - id: COMP_RegionPigeonhole__001
+    #   cell_hint: "C3:C4"
+    #   spatial_note: "left column of pigeonhole array"
+
   LABEL: []
-    # Example: [LABEL__A, LABEL__B, LABEL__C]
-  
-  PATH: []
-    # Example: [PATH_Perimeter__001]
+    # Example:
+    # - id: LABEL__A
+    #   cell_hint: "A1"
+    #   spatial_note: "top-left corner label"
+
+  BOUND: []
+    # Example:
+    # - id: BOUND_Perimeter__001
+    #   cell_hint: "A1:J18"
+    #   spatial_note: "outer boundary of entire diagram"
 
 # COLOR ZONE MAPPING
 # Objects generated from color highlights
@@ -48,11 +72,12 @@ corrections: []
   #   reason: "Small unit is chair, not furniture"
 
 # COUNTS (for verification)
+# Note: COMP children are NOT counted separately — only the parent COMP counts.
 counts:
-  total: 0
+  total: 0        # Sum of top-level objects only
   by_type:
     AREA: 0
-    ICON: 0
+    ICON: 0       # Top-level ICONs only (excludes ICON children inside COMPs)
     COMP: 0
     LABEL: 0
-    PATH: 0
+    BOUND: 0

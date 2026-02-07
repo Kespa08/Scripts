@@ -366,13 +366,15 @@ object_mapping:
       illustrator_object: "COMP_VotingBooth__*"
   
   # Perimeter Boundary
+  # NOTE: The document uses BOUND_ prefix for boundaries, not PATH_.
+  # PATH_ is not a valid semantic prefix in the Coordinate Placement Spec.
   - match:
       image_category: "area"
       description: "continuous line or border forming perimeter"
       spatial_role: "boundary or wall"
     target:
-      illustrator_type: "PATH"
-      illustrator_object: "PATH_Perimeter__*"
+      illustrator_type: "BOUND"
+      illustrator_object: "BOUND_Perimeter__*"
   
   # Publication
   - match:

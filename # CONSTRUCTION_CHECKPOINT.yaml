@@ -1,0 +1,116 @@
+# CONSTRUCTION_CHECKPOINT.yaml
+# Phase 2 output — the approved construction plan in machine-readable form.
+# This is the input contract for Phase 3 (Script Generation & Execution).
+#
+# The construction_plan.md (human-readable) is produced alongside this file,
+# but this YAML is the authoritative input for script generation.
+
+checkpoint_metadata:
+  source_interpretation_checkpoint: ""  # e.g., "interpretation_checkpoint_2026-02-06.yaml"
+  source_document_state: ""             # e.g., "doc_state_export_2026-02-04 - 1.json"
+  qa_status: ""                         # PASSED | APPROVED_WITH_CORRECTIONS
+  qa_timestamp: ""                      # ISO 8601 format
+  plan_version: ""                      # e.g., "1.0"
+
+# === STATE SUMMARY ===
+state_summary:
+  active_objects_before: 0    # Count of objects on artboard 0 before operations
+  source_assets_available: 0  # Count of objects on Unused Assets artboard
+  target_objects_after: 0     # Expected count after all operations (must match checkpoint total)
+  net_change: 0               # target - active_before
+
+# === OPERATION COUNTS ===
+operation_counts:
+  DUPLICATE: 0
+  ADD: 0
+  REMOVE: 0
+  MOVE: 0
+  RENAME: 0
+  KEEP: 0
+  total_operations: 0         # Sum of DUPLICATE + ADD + REMOVE + MOVE + RENAME (KEEP excluded)
+
+# === SEQUENCED OPERATIONS ===
+# Operations are listed in execution order. Phase 3 must execute them in this exact sequence.
+# Each operation is fully specified — no inference required by the script generator.
+
+operations:
+  phase_A_remove: []
+    # Example:
+    # - op: REMOVE
+    #   object_id: "ICON_Staff__005"
+    #   current_cell: "D6"
+    #   destination: "Unused assets"
+
+  phase_B_duplicate_add_parents: []
+    # Example:
+    # - op: DUPLICATE
+    #   object_id: "AREA_Furniture__015"
+    #   source_object: "AREA_Furniture__014"
+    #   source_artboard: "Artboard 1"
+    #   target_layer: "AREAS - Furniture"
+    #   target_cell: "B8"
+    #   target_cell_range: "B8:C9"
+    #   position_strategy: "cell"
+
+  phase_C_duplicate_add_children: []
+    # Example:
+    # - op: DUPLICATE
+    #   object_id: "ICON_Chair__002"
+    #   source_object: "ICON_Chair__001"
+    #   source_artboard: "Unused assets"
+    #   target_layer: "ICONS - Artifacts"
+    #   target_cell: "E5"
+    #   position_strategy: "cell"
+
+  phase_D_move: []
+    # Example:
+    # - op: MOVE
+    #   object_id: "AREA_Furniture__003"
+    #   from_cell: "C8"
+    #   target_cell: "D8"
+    #   target_cell_range: "D8:F9"
+
+  phase_E_rename: []
+    # Example:
+    # - op: RENAME
+    #   current_name: "ICON_Staff__003"
+    #   new_name: "ICON_Staff__001"
+
+# === KEEP LIST ===
+# Objects that require no modification. Listed for audit trail and count reconciliation.
+keep_list: []
+  # Example:
+  # - object_id: "ICON_Staff__001"
+  #   cell: "G4"
+  # - object_id: "COMP_RegionPigeonhole__001"
+  #   cell: "C3:C4"
+
+# === VALIDATION RESULTS ===
+# All checks must pass before this checkpoint is approved.
+validation:
+  dependency_check: null       # PASS | FAIL
+  count_reconciliation: null   # PASS | FAIL
+  source_existence: null       # PASS | FAIL
+  duplicate_id_prevention: null # PASS | FAIL
+  layer_validity: null         # PASS | FAIL
+  cell_validity: null          # PASS | FAIL
+  composite_atomicity: null    # PASS | FAIL
+  naming_consistency: null     # PASS | FAIL
+
+# === WARNINGS ===
+# Non-blocking issues flagged during planning.
+warnings: []
+  # Example:
+  # - type: "MISSING_SOURCE"
+  #   object_id: "ICON_NewAsset__001"
+  #   message: "No source asset found. Magenta placeholder will be inserted."
+  # - type: "NAMING_MISMATCH"
+  #   object_id: "AREA_Furniture_014"
+  #   message: "Document uses single underscore. Plan output normalized to AREA_Furniture__014."
+
+# === QA CORRECTIONS (if any) ===
+corrections: []
+  # Example:
+  # - original_op: "DUPLICATE ICON_Chair__003 at E6"
+  #   corrected_to: "MOVE ICON_Chair__001 from E5 to E6"
+  #   reason: "User indicated existing chair should move, not a new one added"
