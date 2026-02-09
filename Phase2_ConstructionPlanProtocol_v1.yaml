@@ -534,21 +534,46 @@ constraints:
   - "REMOVE always means move to Unused Assets artboard, never permanent deletion"
   - "Object names in the construction plan output use double-underscore suffix convention"
 
+# === CORRECTNESS CONDITION ===
+#
+# Correct(protocol) ↔ ∀x (InterpretationOutput(x) → ActiveArtboard(x))
+#                    ∧ ∀y (ActiveArtboard(y) → InterpretationOutput(y))
+#
+# In plain language:
+#   1. Every checkpoint object must be represented on the active artboard. (injective: checkpoint → artboard)
+#   2. Every object on the active artboard must correspond to a checkpoint item. (no orphans on artboard 0)
+#
+# This is bijective on the active artboard, but NOT on the document as a whole.
+# The Unused Assets artboard (artboard 1) is unconstrained — it may contain any number
+# of objects that are not in the checkpoint. It serves as the asset library and the
+# destination for REMOVE operations.
+#
+# Consequence: any active artboard object not accounted for by the checkpoint is
+# moved to the Unused Assets artboard (rule_4). The active artboard, after all
+# operations, must be a 1:1 mirror of the checkpoint inventory.
+
 # === PLANNING PRINCIPLES ===
 
 principles:
+  active_artboard_purity:
+    rule: "After all operations, the active artboard must contain exactly the objects in the checkpoint — no more, no fewer"
+    rationale: |
+      The active artboard is the authoritative rendering surface. Stale or unmatched objects
+      left on it would produce incorrect output. Objects not in the checkpoint are moved to
+      the Unused Assets artboard, not deleted, so they remain available for future use.
+
   minimalism:
     rule: "Prefer minimal operations - if object can be reused/renamed, prefer that over remove+add"
     example: "If document has ICON_Staff__003 but needs ICON_Staff__001, use RENAME not REMOVE+ADD"
-  
+
   preservation:
     rule: "Move removed objects to unused artboard, don't permanently delete (unless user specifies)"
     rationale: "Allows recovery if plan was incorrect"
-  
+
   explicitness:
     rule: "Every operation must have complete parameters - no implicit assumptions"
     example: "ADD operations must specify layer, position strategy, and source"
-  
+
   verifiability:
     rule: "Plan must be mechanically verifiable before script generation"
     method: "All validation checks must pass before Phase 2 QA"
