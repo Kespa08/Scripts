@@ -32,7 +32,7 @@ planning_sequence:
     action: "Map checkpoint object IDs to their corresponding objects in the Illustrator document state"
 
     method: "three-pass matching"
-    # Pass 1: Filter document objects to only those on the active artboard (artboard index 0).
+    # Pass 1: Filter document objects to only those on the active artboard (artboard index 01).
     #         Objects with cell: null are on the Unused Assets artboard and are SOURCE ASSETS,
     #         not active placements. They must be excluded from matching but remembered as
     #         available sources for DUPLICATE operations.
@@ -55,11 +55,11 @@ planning_sequence:
         Normalization ensures matching operates on semantic identity, not string formatting.
 
     artboard_filter:
-      rule: "Only match checkpoint items against objects on artboard 0 (the active diagram)"
+      rule: "Only match checkpoint items against objects on artboard 01 (the active diagram)"
       active_objects: "Objects where cell != null OR artboard_index == 0"
       source_assets: "Objects where cell == null AND artboard_index != 0"
       rationale: |
-        Artboard 1 ('Unused assets') contains template assets available for duplication.
+        Artboard 02 ('Unused assets') contains template assets available for duplication.
         These must not be matched as 'existing' placements, but should be cataloged as
         available sources for DUPLICATE operations.
 
@@ -141,7 +141,7 @@ planning_sequence:
     action: "Add implementation details to each operation"
     parameters:
       DUPLICATE:
-        - object_id: "ICON_Chair__002"           # Name for the new copy
+        - object_id: "ICON_Chair__002"            # Name for the new copy
         - source_object: "ICON_Chair__001"        # Object to duplicate (active or unused artboard)
         - source_artboard: "Unused assets"        # Which artboard the source lives on
         - target_layer: "ICONS - Artifacts"       # Layer to place the duplicate on
@@ -325,9 +325,9 @@ layer_assignment_rules:
 
 source_asset_resolution:
   search_order:
-    - step: "1. Search active artboard (artboard 0) for an existing instance of the same base name"
+    - step: "1. Search active artboard (artboard 01) for an existing instance of the same base name"
       rationale: "Duplicating an in-place object preserves layer assignment and styling"
-    - step: "2. Search Unused Assets artboard (artboard 1) for a template asset of the same base name"
+    - step: "2. Search Unused Assets artboard (artboard 02) for a template asset of the same base name"
       rationale: "Template assets are pre-styled and ready for placement"
     - step: "3. If no source found anywhere: mark operation as ADD with MISSING_SOURCE flag"
       rationale: "Agent cannot fabricate assets — user must provide or create them"
@@ -367,7 +367,7 @@ construction_plan_output:
 
     ## Document State Comparison
 
-    **Current active objects**: [X] (artboard 0 only)
+    **Current active objects**: [X] (artboard 01 only)
     **Available source assets**: [S] (Unused Assets artboard)
     **Target state**: [Y] objects (from checkpoint)
     **Net change**: [±Z] objects
@@ -541,10 +541,10 @@ constraints:
 #
 # In plain language:
 #   1. Every checkpoint object must be represented on the active artboard. (injective: checkpoint → artboard)
-#   2. Every object on the active artboard must correspond to a checkpoint item. (no orphans on artboard 0)
+#   2. Every object on the active artboard must correspond to a checkpoint item. (no orphans on artboard 01)
 #
 # This is bijective on the active artboard, but NOT on the document as a whole.
-# The Unused Assets artboard (artboard 1) is unconstrained — it may contain any number
+# The Unused Assets artboard (artboard 02) is unconstrained — it may contain any number
 # of objects that are not in the checkpoint. It serves as the asset library and the
 # destination for REMOVE operations.
 #
@@ -577,4 +577,5 @@ principles:
   verifiability:
     rule: "Plan must be mechanically verifiable before script generation"
     method: "All validation checks must pass before Phase 2 QA"
+
 
