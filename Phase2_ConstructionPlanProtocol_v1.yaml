@@ -9,10 +9,14 @@ purpose: "Generate actionable plan to reconfigure Illustrator document based on 
 
 # === INPUTS REQUIRED ===
 required_inputs:
-  - interpretation_checkpoint.yaml  # Approved object inventory from Phase 1
-  - illustrator_document_state.json  # Current state export from .ai file
-  - stakeholder_image  # Reference image (in context from Phase 1)
+  - interpretation_checkpoint.yaml  # Approved object inventory from Phase 1 (with spatial hints)
+  - illustrator_document_state.json  # Current state export from current_state_v2.jsx
+  - stakeholder_image  # Reference image (in context from Phase 1, fallback for spatial data)
   - construction_planning_protocol.yaml  # This file
+
+required_outputs:
+  - construction_checkpoint.yaml  # Machine-readable plan (see # CONSTRUCTION_CHECKPOINT.yaml schema)
+  - construction_plan.md  # Human-readable plan for user QA review
 
 # === PLANNING SEQUENCE ===
 planning_sequence:
@@ -20,85 +24,154 @@ planning_sequence:
     action: "Load and parse current Illustrator document state file"
     output: "Inventory of existing objects in document"
     extract:
-      - "All object names and their types (AREA_*, ICON_*, COMP_*, LABEL_*, PATH_*)"
+      - "All object names and their types (AREA_*, ICON_*, COMP_*, LABEL_*, BOUND_*)"
       - "Layer assignments"
       - "Current positions (if available)"
     
   step_2_compare:
-    action: "map identified objects from phase 1 to their corresponding objects in the illustrator document"
-    method: ??? Not sure what the best method is. 
-    output: "one to one mappings."
-    rule: 
-    - rule1: SAME_NAME_IMPLIES_IDENTITY:
-        forall:
-          x: checkpoint_item
-          y: illustrator_object
-        if:
-          - same_name(x, y)
-        then:
-          - x == y
-    - rule2:
-      - name: ALIGN_OBJECT_COUNTS_BY_NAME
-        
-        condition:
-          - same_name(checkpoint_item, illustrator_object)
-          - count(illustrator_object) != count(checkpoint_item)
-        
-        action:
-          - if: count(illustrator_object) < count(checkpoint_item)
-            then:
-              - duplicate:
-                  target: illustrator_object
-                  count: "count(checkpoint_item) - count(illustrator_object)"
-          
-          - if: count(illustrator_object) > count(checkpoint_item)
-            then:
-              - remove:
-                  target: illustrator_object
-                  count: "count(illustrator_object) - count(checkpoint_item)"
-                  strategy: "last_created"  # or "first_created", "random", etc.
+    action: "Map checkpoint object IDs to their corresponding objects in the Illustrator document state"
+
+    method: "three-pass matching"
+    # Pass 1: Filter document objects to only those on the active artboard (artboard index 0).
+    #         Objects with cell: null are on the Unused Assets artboard and are SOURCE ASSETS,
+    #         not active placements. They must be excluded from matching but remembered as
+    #         available sources for DUPLICATE operations.
+    # Pass 2: Normalize names before comparison (see naming_normalization below).
+    #         Match checkpoint items to active document objects by normalized base name.
+    # Pass 3: Reconcile counts per base name and generate operation deltas.
+
+    output: "Mapping table with columns: checkpoint_id | doc_object_id | operation | notes"
+
+    naming_normalization:
+      rule: "Before comparing names, normalize both checkpoint IDs and document object names"
+      steps:
+        - "Strip instance suffix (__001, __A, _014, etc.) to get the base name"
+        - "Normalize underscore style: collapse single-underscore separators before numeric "
+        - "suffixes to double-underscore (e.g., AREA_Furniture_014 → AREA_Furniture, "
+        - "AREA_Furniture__002 → AREA_Furniture). Base name = prefix + type."
+      rationale: |
+        The document contains inconsistent naming (single vs double underscore before
+        numeric suffixes, e.g. AREA_Furniture_014 vs AREA_StorageUnit__001).
+        Normalization ensures matching operates on semantic identity, not string formatting.
+
+    artboard_filter:
+      rule: "Only match checkpoint items against objects on artboard 0 (the active diagram)"
+      active_objects: "Objects where cell != null OR artboard_index == 0"
+      source_assets: "Objects where cell == null AND artboard_index != 0"
+      rationale: |
+        Artboard 1 ('Unused assets') contains template assets available for duplication.
+        These must not be matched as 'existing' placements, but should be cataloged as
+        available sources for DUPLICATE operations.
+
+    matching_rules:
+      rule_1_exact_match:
+        name: "NORMALIZED_NAME_IMPLIES_IDENTITY"
+        description: "If a checkpoint item and an active document object share the same normalized base name and instance suffix, they are the same object."
+        example: "Checkpoint ICON_Staff__003 matches document ICON_Staff__003 → KEEP"
+
+      rule_2_base_name_count_reconciliation:
+        name: "ALIGN_COUNTS_BY_BASE_NAME"
+        description: |
+          Group checkpoint items and active document objects by normalized base name.
+          Compare counts per group. Generate DUPLICATE or REMOVE operations for any delta.
+        steps:
+          - "Group checkpoint items by base name → checkpoint_counts{base_name: count}"
+          - "Group active document objects by base name → doc_counts{base_name: count}"
+          - "For each base name present in either group:"
+          - "  If doc_count < checkpoint_count → DUPLICATE (checkpoint_count - doc_count) copies"
+          - "  If doc_count > checkpoint_count → REMOVE (doc_count - checkpoint_count) instances"
+          - "  If doc_count == checkpoint_count → KEEP all (may need MOVE/RENAME)"
+        duplicate_source_priority:
+          - "1. Existing active instance of the same base name (duplicate in-place)"
+          - "2. Source asset on Unused Assets artboard with matching base name"
+          - "3. Flag as MISSING_SOURCE for user resolution"
+        remove_strategy: "Prefer removing highest-suffixed instances (e.g., __006 before __001)"
+
+      rule_3_unmatched_checkpoint_items:
+        name: "NO_DOCUMENT_MATCH"
+        description: "Checkpoint item with no matching base name in active document objects"
+        action: "Generate ADD operation; resolve source from Unused Assets artboard or flag MISSING_SOURCE"
+
+      rule_4_unmatched_document_objects:
+        name: "NO_CHECKPOINT_MATCH"
+        description: "Active document object with no matching base name in checkpoint"
+        action: "Generate REMOVE operation (move to Unused Assets artboard)"
+
+    composite_handling:
+      rule: |
+        COMP_* objects are matched as atomic units. Their children (ICON_*, AREA_* inside
+        the group) are NOT matched independently during comparison. Child objects travel
+        with their parent — a KEEP/MOVE/DUPLICATE on a COMP implies the same operation
+        on all its children. Children must NOT appear as separate line items in the
+        mapping table.
+      count_rule: |
+        When reconciling object counts, COMP children are excluded from the per-type
+        totals. Only top-level (non-child) objects are counted.
+        Example: COMP_RegionPigeonhole__006 containing ICON_RegionBallot__001 and
+        AREA_StorageUnit__002 counts as 1 COMP, not 1 COMP + 1 ICON + 1 AREA.
     
   step_3_categorize_operations:
     action: "Determine operation type for each object change"
     operations:
-      ADD: "Object exists in checkpoint but not in current document"
-      REMOVE: "Object exists in current document but not in checkpoint"
-      RENAME: "Similar object exists but with different name/number"
-      MOVE: "Object exists with correct name but wrong position (if positional data available)"
-      KEEP: "Object exists in both with correct name"
+      DUPLICATE: "Object type exists in document (active or unused artboard) but more instances needed"
+      ADD: "Object type has no source in the document at all — requires external asset or placeholder"
+      REMOVE: "Object exists in active document but not in checkpoint — move to Unused Assets artboard"
+      RENAME: "Object exists but instance suffix needs changing (e.g., __003 → __001)"
+      MOVE: "Object exists with correct name but wrong cell position"
+      KEEP: "Object exists in both with correct name and position — no action"
+    notes:
+      - "DUPLICATE is the primary way new instances appear. ADD is a fallback when no source exists."
+      - "Most 'add' scenarios are actually DUPLICATE from the Unused Assets artboard."
     output: "Categorized operation lists"
   
   step_4_sequence_operations:
     action: "Order operations to avoid dependency conflicts"
     rules:
-      - "REMOVE operations first (clear space)"
-      - "ADD parent objects before child objects (e.g., AREA_Furniture before contained ICON)"
-      - "ADD operations for standalone objects"
-      - "MOVE operations after ADD (requires objects to exist)"
-      - "RENAME operations last (cosmetic)"
+      - "Phase A: REMOVE operations first (clear space, move to Unused Assets artboard)"
+      - "Phase B: DUPLICATE/ADD parent COMP_* and AREA_* objects"
+      - "Phase C: DUPLICATE/ADD child and standalone ICON_* objects"
+      - "Phase D: MOVE operations (requires objects to exist at final names)"
+      - "Phase E: RENAME operations last (cosmetic, suffix resequencing)"
+    notes:
+      - "COMP_* objects are moved/duplicated atomically with their children — do not sequence children separately"
+      - "LABEL_* objects follow ICON rules (Phase C) unless attached to a COMP"
     output: "Sequenced operation plan"
   
   step_5_specify_parameters:
     action: "Add implementation details to each operation"
     parameters:
+      DUPLICATE:
+        - object_id: "ICON_Chair__002"           # Name for the new copy
+        - source_object: "ICON_Chair__001"        # Object to duplicate (active or unused artboard)
+        - source_artboard: "Unused assets"        # Which artboard the source lives on
+        - target_layer: "ICONS - Artifacts"       # Layer to place the duplicate on
+        - target_cell: "E5"                       # Cell-grid placement (from Coordinate Placement Spec)
+        - target_cell_range: "E5:F5"              # Optional: if object spans multiple cells
+        - position_strategy: "cell"               # cell | cell_with_offset | cell_anchor_point
+
       ADD:
-        - object_id: "ICON_Chair__001"
-        - source_library: "path/to/library/Chair.ai"  # Where to get the symbol/component
-        - target_layer: "Icons"  # Which layer to place on
-        - position: "relative_to: AREA_Furniture__002, offset: [0, -50]"  # Positioning logic
-      
+        - object_id: "ICON_NewAsset__001"
+        - source: "MISSING_SOURCE"                # Flag for user — no template asset exists
+        - target_layer: "ICONS - Artifacts"
+        - target_cell: "D3"
+        - placeholder: true                       # Insert magenta placeholder per Coordinate Placement Spec
+        - notes: "Requires manual asset creation or external import"
+
       REMOVE:
         - object_id: "ICON_Staff__005"
-        - move_to_unused: true  # Move to unused artboard vs permanent delete
-      
+        - destination: "Unused assets"            # Move to unused artboard (never permanently delete)
+        - current_cell: "D6"                      # For verification
+
       MOVE:
         - object_id: "AREA_Furniture__003"
-        - from_position: [100, 200]
-        - to_position: [150, 300]
-      
+        - from_cell: "C8"                         # Current cell (for verification)
+        - to_cell: "D8"                           # Target cell
+        - to_cell_range: "D8:F9"                  # Optional: span specification
+
       RENAME:
         - from: "ICON_Staff__003"
         - to: "ICON_Staff__001"
+        - notes: "Suffix resequencing only — no visual change"
     output: "Fully specified operation list"
   
   step_6_validate:
@@ -113,71 +186,163 @@ planning_sequence:
 # === OPERATION SPECIFICATIONS ===
 
 operation_types:
+  DUPLICATE:
+    description: "Copy an existing document object to create a new instance"
+    required_params:
+      - object_id: "Name for the new copy (e.g., ICON_Chair__002)"
+      - source_object: "Name of the object to duplicate"
+      - target_layer: "Layer name (see layer_assignment_rules)"
+      - target_cell: "Cell-grid placement (e.g., 'E5') per Coordinate Placement Spec"
+    optional_params:
+      - source_artboard: "Which artboard the source is on (default: search active first, then 'Unused assets')"
+      - target_cell_range: "Multi-cell span (e.g., 'E5:F7')"
+      - position_strategy: "cell | cell_with_offset | cell_anchor_point (default: cell)"
+      - cell_offset: "{ dx: number_pt, dy: number_pt } — grid-aligned offset within cell"
+    note: "This is the primary operation for adding instances. Prefer over ADD when a source asset exists."
+
   ADD:
+    description: "Create a new object with no existing source in the document — triggers placeholder"
     required_params:
-      - object_id: "Target object name (e.g., ICON_Chair__001)"
-      - object_type: "AREA | ICON | COMP | LABEL | PATH"
-      - target_layer: "Layer name in Illustrator"
+      - object_id: "Target object name (e.g., ICON_NewAsset__001)"
+      - object_type: "AREA | ICON | COMP | LABEL | BOUND"
+      - target_layer: "Layer name (see layer_assignment_rules)"
+      - target_cell: "Cell-grid placement per Coordinate Placement Spec"
     optional_params:
-      - source_library: "Path to library file containing symbol/component"
-      - position_strategy: "absolute | relative | grid_based | semantic"
-      - position_params: "Coordinates or relative positioning data"
-      - parent_object: "If contained within another object"
-      - styling: "Fill color, stroke, opacity, etc."
-    
+      - target_cell_range: "Multi-cell span"
+      - position_strategy: "cell | cell_with_offset | cell_anchor_point"
+      - cell_offset: "Grid-aligned offset"
+    note: |
+      ADD should only be used when no source object exists anywhere in the document
+      (neither active artboard nor Unused Assets). A magenta placeholder circle will be
+      inserted per the Coordinate Placement Spec missing_semantic_assets rules.
+      The user must manually replace the placeholder with the real asset.
+
   REMOVE:
+    description: "Move an active object to the Unused Assets artboard"
     required_params:
-      - object_id: "Object to remove"
+      - object_id: "Object to remove from active artboard"
     optional_params:
-      - move_to_unused: true  # Move to unused artboard instead of delete
-      - archive: true  # Keep reference copy
-    
+      - current_cell: "Current cell position (for verification logging)"
+    note: |
+      REMOVE always means 'move to Unused Assets artboard', never permanent deletion.
+      This preserves recoverability. For COMP_* objects, all children move with the parent.
+
   MOVE:
+    description: "Relocate an object to a different cell position on the active artboard"
     required_params:
       - object_id: "Object to relocate"
-      - target_position: "New position"
+      - target_cell: "Destination cell (e.g., 'D8')"
     optional_params:
-      - from_position: "Current position (for validation)"
-      - position_strategy: "How to calculate target position"
-    
+      - from_cell: "Current cell (for verification)"
+      - target_cell_range: "Multi-cell span at destination"
+      - position_strategy: "cell | cell_with_offset | cell_anchor_point"
+      - cell_offset: "Grid-aligned offset at destination"
+    note: "For COMP_* objects, all children move with the parent (atomic move)."
+
   RENAME:
+    description: "Change an object's name/suffix without moving or modifying appearance"
     required_params:
       - current_name: "Existing object name"
       - new_name: "Target object name"
-    note: "Only changes name/suffix, does not modify visual appearance"
-    
+    note: |
+      Only changes name/suffix, does not modify visual appearance or position.
+      Typically used for instance suffix resequencing (e.g., __003 → __001 after removals).
+
   KEEP:
     required_params:
       - object_id: "Object to leave unchanged"
-    note: "No action required, listed for completeness"
+    note: "No action required. Listed for audit trail completeness and count reconciliation."
 
 # === POSITIONING STRATEGIES ===
+# All strategies use the cell-grid coordinate system defined in Coordinate Placement Spec v1.
+# Cells are referenced as spreadsheet-style coordinates: column letter + row number (e.g., E2).
+# Cell ranges use colon notation (e.g., D4:F7).
+# The cell grid is derived from document guides (GUIDE_xA..xK, GUIDE_y1..y19).
 
 position_strategies:
-  absolute:
-    description: "Exact pixel coordinates"
-    format: {x: 100, y: 200}
-    use_when: "Precise placement known"
-  
-  relative:
-    description: "Position relative to another object"
-    format: {relative_to: "AREA_Furniture__002", offset: [0, -50], anchor: "top_center"}
-    use_when: "Object should be positioned near/around another object"
-  
-  grid_based:
-    description: "Position in logical grid"
-    format: {grid_cell: [2, 3], alignment: "center"}
-    use_when: "Objects align to implicit grid structure"
-  
-  semantic:
-    description: "Named positions"
-    format: {position: "top_left" | "center" | "bottom_right"}
-    use_when: "Grid coordinates unclear, approximate positioning acceptable"
-  
-  contained:
-    description: "Positioned within parent object"
-    format: {parent: "AREA_Furniture__001", position: "center" | "top_left" | etc}
-    use_when: "Icon/label belongs inside furniture/area"
+  cell:
+    description: "Place object within a named cell, snapped to grid"
+    format: { cell: "E2" }
+    anchor_default: "top-left corner of cell, snapped to grid"
+    use_when: "Standard single-cell placement"
+    reference: "Coordinate Placement Spec v1 → placement_semantics.anchor_types.cell_placement"
+
+  cell_range:
+    description: "Object spans multiple cells"
+    format: { cell: "D4:F7" }
+    use_when: "AREA_*, COMP_*, or BOUND_* objects that span multiple cells"
+    reference: "Coordinate Placement Spec v1 → placement_semantics.anchor_types.cell_range"
+
+  cell_with_offset:
+    description: "Cell placement with grid-aligned offset"
+    format: { cell: "E2", dx: 6.5, dy: 3.25 }
+    constraints: "dx and dy MUST be multiples of grid_unit_pt (3.25)"
+    use_when: "Object needs fine positioning within a cell"
+    reference: "Coordinate Placement Spec v1 → placement_semantics.anchor_types.cell_with_offset"
+
+  cell_anchor_point:
+    description: "Cell placement anchored to a named point"
+    format: { cell: "E2", anchor: "center" }
+    anchor_options: ["top-left", "top-right", "bottom-left", "bottom-right", "center"]
+    use_when: "Object should be centered or corner-aligned within a cell"
+    reference: "Coordinate Placement Spec v1 → placement_semantics.anchor_types.cell_anchor_point"
+
+  deprecated_strategies:
+    note: |
+      The following are NOT valid positioning strategies in this protocol:
+      - absolute pixel coordinates (bypasses the cell grid, breaks portability)
+      - semantic named positions ("top_left", "center" without cell reference)
+      - numeric grid tuples ([2, 3] — use cell notation "C2" instead)
+      All positions must resolve to a cell reference.
+
+# === LAYER ASSIGNMENT RULES ===
+# Derived from the template document's actual layer structure.
+# These rules determine which layer an object is placed on during DUPLICATE/ADD operations.
+
+layer_assignment_rules:
+  note: "Layer names are fixed (per fixed_document_rules: keep_layers_unchanged: true)"
+  mappings:
+    ICON_Staff: "ICONS - People"
+    ICON_PeopleLeader: "ICONS - People"
+    ICON_*: "ICONS - Artifacts"        # Default for all other ICON_ types
+    COMP_*: "COMPOSITES - Artifacts"
+    AREA_Furniture: "AREAS - Furniture"
+    AREA_StorageUnit: "AREAS - Furniture"     # Note: standalone StorageUnits go here
+    AREA_DotZone: "Zones"
+    AREA_SquareZone: "Zones"
+    BOUND_*: "Zones"
+    LABEL_*: "LABELS"
+  resolution_order:
+    - "1. Check for specific base-name match (e.g., ICON_Staff → ICONS - People)"
+    - "2. Fall back to prefix wildcard match (e.g., ICON_* → ICONS - Artifacts)"
+    - "3. If no match: flag as LAYER_UNKNOWN for user resolution"
+  composite_children:
+    rule: "Children of COMP_* inherit the COMP's layer assignment — they are not assigned independently"
+    example: "ICON_RegionBallot__001 inside COMP_RegionPigeonhole__006 → layer is COMPOSITES - Artifacts (same as parent)"
+
+# === SOURCE ASSET RESOLUTION ===
+# How to find the source object for DUPLICATE operations.
+
+source_asset_resolution:
+  search_order:
+    - step: "1. Search active artboard (artboard 0) for an existing instance of the same base name"
+      rationale: "Duplicating an in-place object preserves layer assignment and styling"
+    - step: "2. Search Unused Assets artboard (artboard 1) for a template asset of the same base name"
+      rationale: "Template assets are pre-styled and ready for placement"
+    - step: "3. If no source found anywhere: mark operation as ADD with MISSING_SOURCE flag"
+      rationale: "Agent cannot fabricate assets — user must provide or create them"
+
+  unused_assets_catalog:
+    description: |
+      At the start of Phase 2, the agent should build a catalog of all objects on the
+      Unused Assets artboard (objects where cell == null and artboard != 0 in the document
+      state export). This catalog serves as the 'asset library' for DUPLICATE operations.
+    format:
+      - "base_name: [list of available instance names]"
+    example:
+      ICON_Chair: ["ICON_Chair__001"]
+      ICON_Entrance: ["ICON_Entrance__001"]
+      COMP_VotingBooth: ["COMP_VotingBooth__001"]
 
 # === DEPENDENCY RESOLUTION ===
 
@@ -199,141 +364,216 @@ dependency_rules:
 construction_plan_output:
   format: |
     # Construction Plan
-    
+
     ## Document State Comparison
-    
-    **Current state**: [X] objects
-    **Target state**: [Y] objects
+
+    **Current active objects**: [X] (artboard 0 only)
+    **Available source assets**: [S] (Unused Assets artboard)
+    **Target state**: [Y] objects (from checkpoint)
     **Net change**: [±Z] objects
-    
+
     ### Objects by Operation Type:
-    - **ADD**: [N] objects
-    - **REMOVE**: [N] objects
+    - **DUPLICATE**: [N] objects (from existing source)
+    - **ADD**: [N] objects (no source — placeholder required)
+    - **REMOVE**: [N] objects (→ Unused Assets artboard)
     - **MOVE**: [N] objects
     - **RENAME**: [N] objects
     - **KEEP**: [N] objects (no action required)
-    
+
     ---
-    
+
+    ## Mapping Table
+
+    | Checkpoint ID | Document Object | Operation | Notes |
+    |---|---|---|---|
+    | ICON_Staff__001 | ICON_Staff__001 | KEEP | Cell G4, no change |
+    | ICON_Chair__001 | (source: ICON_Chair__001 on Unused Assets) | DUPLICATE | Place at E5 |
+    | — | ICON_Staff__005 | REMOVE | Move to Unused Assets |
+    [Continue...]
+
+    ---
+
     ## Sequenced Operations Plan
-    
+
     ### Phase A: Remove Operations
-    1. REMOVE ICON_Staff__005 → Move to unused artboard
-    2. REMOVE AREA_Furniture__010 → Move to unused artboard
+    1. REMOVE ICON_Staff__005
+       - Current cell: D6
+       - Destination: Unused Assets artboard
     [Continue...]
-    
-    ### Phase B: Add Parent Objects
-    1. ADD AREA_Furniture__002
-       - Type: AREA, Subtype: furniture
-       - Layer: "Furniture"
-       - Position: Grid [1, 1]
-       - Source: Library symbol "Table_Standard"
+
+    ### Phase B: Duplicate/Add Parent Objects (COMP_, AREA_)
+    1. DUPLICATE AREA_Furniture__015
+       - Source: AREA_Furniture__014 (active artboard)
+       - Layer: AREAS - Furniture
+       - Target cell: B8:C9
     [Continue...]
-    
-    ### Phase C: Add Child Objects
-    1. ADD ICON_Chair__001
-       - Type: ICON, Subtype: chair
-       - Layer: "Icons"
-       - Position: Relative to AREA_Furniture__002, offset [0, -50], anchor "top_center"
-       - Source: Library symbol "Chair_Standard"
+
+    ### Phase C: Duplicate/Add Standalone Objects (ICON_, LABEL_)
+    1. DUPLICATE ICON_Chair__002
+       - Source: ICON_Chair__001 (Unused Assets artboard)
+       - Layer: ICONS - Artifacts
+       - Target cell: E5
     [Continue...]
-    
+
     ### Phase D: Move Operations
     1. MOVE AREA_Furniture__003
-       - From: [100, 200]
-       - To: [150, 300]
+       - From cell: C8
+       - To cell: D8:F9
     [Continue...]
-    
+
     ### Phase E: Rename Operations
     1. RENAME ICON_Staff__003 → ICON_Staff__001
+       - Suffix resequencing only
     [Continue...]
-    
+
     ---
-    
+
     ## Validation Checks
-    
+
     ✓ No circular dependencies detected
-    ✓ All parent objects added before children
-    ✓ All position references valid
-    ✓ Final object count matches checkpoint: [Y] objects
-    ⚠️ [Any warnings]
-    
+    ✓ All COMP_* operations are atomic (children travel with parent)
+    ✓ All target_cell references are valid grid cells
+    ✓ All source objects exist (active or Unused Assets artboard)
+    ✓ All layer assignments resolve via layer_assignment_rules
+    ✓ Final object count matches checkpoint: [Y] top-level objects
+    ⚠️ [Any warnings — MISSING_SOURCE, LAYER_UNKNOWN, etc.]
+
     ---
-    
+
     **Operations total**: [N] operations across [M] phases
-    **Estimated complexity**: Low | Medium | High
 
 # === VALIDATION RULES ===
 
 validation_checks:
   dependency_check:
-    rule: "Verify no operation depends on an operation that comes later"
-    method: "For each ADD with parent/relative_to, confirm referenced object added earlier or exists already"
-  
+    rule: "Verify no operation depends on an operation that comes later in the sequence"
+    method: "For each DUPLICATE/ADD with a parent COMP, confirm parent is created earlier or already exists"
+
   count_reconciliation:
-    rule: "Final object count = current count - removes + adds"
-    method: "Calculate: (current_total - REMOVE_count + ADD_count) = checkpoint_total"
-  
-  duplicate_prevention:
-    rule: "No two operations create same object_id"
-    method: "Check all ADD operations for unique object_ids"
-  
+    rule: "Final top-level object count must match checkpoint total"
+    method: |
+      Calculate: (active_artboard_count - REMOVE_count + DUPLICATE_count + ADD_count) = checkpoint_total
+      IMPORTANT: Exclude COMP children from counts (they travel with parent).
+      Only count top-level objects.
+
+  source_existence:
+    rule: "Every DUPLICATE operation must reference an existing source object"
+    method: "Verify source_object exists in active artboard OR Unused Assets catalog"
+
+  duplicate_id_prevention:
+    rule: "No two operations create the same object_id"
+    method: "Check all DUPLICATE and ADD operations for unique object_ids"
+
   layer_validity:
-    rule: "All target_layer references must exist in document"
-    method: "Cross-reference layer names against document_state.json layer list"
-  
-  position_reference_validity:
-    rule: "All relative_to and parent references must be valid object_ids"
-    method: "Verify referenced objects exist in current_state OR will be added earlier in sequence"
+    rule: "All target_layer values must exist in document"
+    method: "Cross-reference against document_state.json layer list. Must resolve via layer_assignment_rules."
+
+  cell_validity:
+    rule: "All target_cell values must be valid cell references"
+    method: |
+      Verify column letter is within A-J (from GUIDE_xA to GUIDE_xK).
+      Verify row number is within 1-18 (from GUIDE_y1 to GUIDE_y19).
+      Cell ranges must have start <= end for both column and row.
+
+  composite_atomicity:
+    rule: "No operation targets a child of a COMP_* independently"
+    method: "Verify no MOVE/REMOVE/RENAME targets an object that is listed as a child in any COMP_* group"
+
+  naming_consistency:
+    rule: "All output object_ids use double-underscore convention for suffixes"
+    method: "Verify pattern: PREFIX_TypeName__NNN or LABEL_*__Letter"
 
 # === ERROR HANDLING ===
 
 common_issues:
-  missing_library_symbols:
-    detection: "Source library path does not exist"
-    resolution: "Flag operation, suggest using existing similar object or manual creation"
-  
-  layer_not_found:
-    detection: "Target layer does not exist in document"
-    resolution: "Either create layer OR default to existing layer (specify which)"
-  
+  missing_source_asset:
+    detection: "DUPLICATE source_object not found on active artboard or Unused Assets artboard"
+    resolution: "Convert to ADD operation with MISSING_SOURCE flag and magenta placeholder. User must provide asset."
+
+  layer_resolution_failure:
+    detection: "Object base name does not match any layer_assignment_rules mapping"
+    resolution: "Flag as LAYER_UNKNOWN. Do not guess — ask user which layer to use."
+
   circular_dependency:
     detection: "Object A requires B, B requires A"
     resolution: "Reorder operations OR flag for user clarification"
-  
-  position_ambiguity:
-    detection: "No clear positioning strategy for object"
-    resolution: "Default to semantic positioning, flag for user review"
+
+  cell_position_unknown:
+    detection: "Checkpoint item has no spatial data and image context is unavailable"
+    resolution: |
+      If checkpoint includes spatial hints (cell_hint, group membership): use those.
+      If image is still in context: re-derive position from image analysis.
+      Otherwise: flag as POSITION_UNKNOWN for user placement.
+
+  naming_mismatch:
+    detection: "Document object uses single-underscore suffix (e.g., AREA_Furniture_014) instead of double"
+    resolution: |
+      Normalization handles this for matching purposes. However, the construction plan
+      output should use the CORRECTED double-underscore form. If the object is KEPT
+      (not modified), optionally generate a RENAME to fix the suffix convention.
+
+  composite_child_targeted:
+    detection: "An operation targets an object that is a child of a COMP_* group"
+    resolution: "Operations on COMP children are invalid. Target the parent COMP instead."
 
 # === ASSUMPTIONS & CONSTRAINTS ===
 
 assumptions:
   - "Illustrator document structure (guides, layers) remains unchanged per fixed_document_rules"
-  - "Library symbols/components are available in accessible location"
-  - "Document state export is accurate and complete"
-  - "Image remains in agent context from Phase 1"
+  - "Document state export is accurate, complete, and includes artboard index and cell assignments"
+  - "The Unused Assets artboard (index 1) contains all available template assets"
+  - "Image remains in agent context from Phase 1 (for spatial reference if checkpoint lacks cell hints)"
+  - "All object names in the document follow the semantic prefix taxonomy (ICON_, COMP_, AREA_, BOUND_, LABEL_)"
 
 constraints:
-  - "No modifications to document guides"
-  - "No layer structure changes"
+  - "No modifications to document guides (GUIDE_*)"
+  - "No layer structure changes (no creating, deleting, or renaming layers)"
+  - "All positions expressed as cell references per Coordinate Placement Spec v1"
   - "Object overlap is allowed per fixed_document_rules"
-  - "Follow Illustrator layout logic per fixed_document_rules"
+  - "COMP_* objects are atomic — never operate on their children independently"
+  - "REMOVE always means move to Unused Assets artboard, never permanent deletion"
+  - "Object names in the construction plan output use double-underscore suffix convention"
+
+# === CORRECTNESS CONDITION ===
+#
+# Correct(protocol) ↔ ∀x (InterpretationOutput(x) → ActiveArtboard(x))
+#                    ∧ ∀y (ActiveArtboard(y) → InterpretationOutput(y))
+#
+# In plain language:
+#   1. Every checkpoint object must be represented on the active artboard. (injective: checkpoint → artboard)
+#   2. Every object on the active artboard must correspond to a checkpoint item. (no orphans on artboard 0)
+#
+# This is bijective on the active artboard, but NOT on the document as a whole.
+# The Unused Assets artboard (artboard 1) is unconstrained — it may contain any number
+# of objects that are not in the checkpoint. It serves as the asset library and the
+# destination for REMOVE operations.
+#
+# Consequence: any active artboard object not accounted for by the checkpoint is
+# moved to the Unused Assets artboard (rule_4). The active artboard, after all
+# operations, must be a 1:1 mirror of the checkpoint inventory.
 
 # === PLANNING PRINCIPLES ===
 
 principles:
+  active_artboard_purity:
+    rule: "After all operations, the active artboard must contain exactly the objects in the checkpoint — no more, no fewer"
+    rationale: |
+      The active artboard is the authoritative rendering surface. Stale or unmatched objects
+      left on it would produce incorrect output. Objects not in the checkpoint are moved to
+      the Unused Assets artboard, not deleted, so they remain available for future use.
+
   minimalism:
     rule: "Prefer minimal operations - if object can be reused/renamed, prefer that over remove+add"
     example: "If document has ICON_Staff__003 but needs ICON_Staff__001, use RENAME not REMOVE+ADD"
-  
+
   preservation:
     rule: "Move removed objects to unused artboard, don't permanently delete (unless user specifies)"
     rationale: "Allows recovery if plan was incorrect"
-  
+
   explicitness:
     rule: "Every operation must have complete parameters - no implicit assumptions"
     example: "ADD operations must specify layer, position strategy, and source"
-  
+
   verifiability:
     rule: "Plan must be mechanically verifiable before script generation"
     method: "All validation checks must pass before Phase 2 QA"
