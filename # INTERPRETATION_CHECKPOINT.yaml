@@ -43,9 +43,9 @@ objects:
     #   cell_hint: "A1"
     #   spatial_note: "top-left corner label"
 
-  BOUND: []
+  PATH: []
     # Example:
-    # - id: BOUND_Perimeter__001
+    # - id: PATH_Perimeter__001
     #   cell_hint: "A1:J18"
     #   spatial_note: "outer boundary of entire diagram"
 
@@ -80,4 +80,5 @@ counts:
     ICON: 0       # Top-level ICONs only (excludes ICON children inside COMPs)
     COMP: 0
     LABEL: 0
-    BOUND: 0
+
+    PATH: 0
