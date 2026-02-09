@@ -24,7 +24,7 @@ planning_sequence:
     action: "Load and parse current Illustrator document state file"
     output: "Inventory of existing objects in document"
     extract:
-      - "All object names and their types (AREA_*, ICON_*, COMP_*, LABEL_*, BOUND_*)"
+      - "All object names and their types (AREA_*, ICON_*, COMP_*, LABEL_*, PATH_*)"
       - "Layer assignments"
       - "Current positions (if available)"
     
@@ -204,7 +204,7 @@ operation_types:
     description: "Create a new object with no existing source in the document — triggers placeholder"
     required_params:
       - object_id: "Target object name (e.g., ICON_NewAsset__001)"
-      - object_type: "AREA | ICON | COMP | LABEL | BOUND"
+      - object_type: "AREA | ICON | COMP | LABEL | PATH"
       - target_layer: "Layer name (see layer_assignment_rules)"
       - target_cell: "Cell-grid placement per Coordinate Placement Spec"
     optional_params:
@@ -270,7 +270,7 @@ position_strategies:
   cell_range:
     description: "Object spans multiple cells"
     format: { cell: "D4:F7" }
-    use_when: "AREA_*, COMP_*, or BOUND_* objects that span multiple cells"
+    use_when: "AREA_*, COMP_*, or PATH_* objects that span multiple cells"
     reference: "Coordinate Placement Spec v1 → placement_semantics.anchor_types.cell_range"
 
   cell_with_offset:
@@ -310,7 +310,7 @@ layer_assignment_rules:
     AREA_StorageUnit: "AREAS - Furniture"     # Note: standalone StorageUnits go here
     AREA_DotZone: "Zones"
     AREA_SquareZone: "Zones"
-    BOUND_*: "Zones"
+    PATH_*: "Zones"
     LABEL_*: "LABELS"
   resolution_order:
     - "1. Check for specific base-name match (e.g., ICON_Staff → ICONS - People)"
@@ -523,7 +523,7 @@ assumptions:
   - "Document state export is accurate, complete, and includes artboard index and cell assignments"
   - "The Unused Assets artboard (index 1) contains all available template assets"
   - "Image remains in agent context from Phase 1 (for spatial reference if checkpoint lacks cell hints)"
-  - "All object names in the document follow the semantic prefix taxonomy (ICON_, COMP_, AREA_, BOUND_, LABEL_)"
+  - "All object names in the document follow the semantic prefix taxonomy (ICON_, COMP_, AREA_, PATH_, LABEL_)"
 
 constraints:
   - "No modifications to document guides (GUIDE_*)"
@@ -577,6 +577,7 @@ principles:
   verifiability:
     rule: "Plan must be mechanically verifiable before script generation"
     method: "All validation checks must pass before Phase 2 QA"
+
 
 
 
