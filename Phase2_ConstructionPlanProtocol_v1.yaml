@@ -45,13 +45,13 @@ planning_sequence:
     naming_normalization:
       rule: "Before comparing names, normalize both checkpoint IDs and document object names"
       steps:
-        - "Strip instance suffix (__001, __A, _014, etc.) to get the base name"
+        - "Strip instance suffix (__001, __A, __014, etc.) to get the base name"
         - "Normalize underscore style: collapse single-underscore separators before numeric "
-        - "suffixes to double-underscore (e.g., AREA_Furniture_014 → AREA_Furniture, "
+        - "suffixes to double-underscore (e.g., AREA_Furniture__014 → AREA_Furniture, "
         - "AREA_Furniture__002 → AREA_Furniture). Base name = prefix + type."
       rationale: |
         The document contains inconsistent naming (single vs double underscore before
-        numeric suffixes, e.g. AREA_Furniture_014 vs AREA_StorageUnit__001).
+        numeric suffixes, e.g. AREA_Furniture__014 vs AREA_StorageUnit__001).
         Normalization ensures matching operates on semantic identity, not string formatting.
 
     artboard_filter:
@@ -577,5 +577,6 @@ principles:
   verifiability:
     rule: "Plan must be mechanically verifiable before script generation"
     method: "All validation checks must pass before Phase 2 QA"
+
 
 
