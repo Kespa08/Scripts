@@ -26,15 +26,23 @@ fixed_document_rules:
 
 analysis_sequence:
   step_1_baseline_count:
-    action: "Count and catalog ALL gray rectangles first, before processing any other visual elements"
+    action: "Count and catalog ALL furniture areas, using red highlights as the primary signal"
     output_required: "List of AREA_Furniture__001 through __NNN with spatial locations"
     rule: "Complete this step entirely before proceeding to step 2"
-    rationale: "Gray rectangles are easiest to miss when highlights/text draw attention"
-  
+    method:
+      primary: "Count red highlights — each red highlight = one AREA_Furniture"
+      fallback: "If no red highlights present, fall back to counting gray rectangles via top-to-bottom, left-to-right sweep"
+    rationale: |
+      Gray rectangles are the most error-prone objects to count — they blend with
+      backgrounds, nest inside compositions, and hide behind color zones.
+      Red highlights, applied by the stakeholder before submission, pre-mark furniture
+      explicitly and eliminate counting ambiguity.
+
   step_2_color_semantics:
-    action: "Identify and count all color highlights (orange, green, blue, purple)"
+    action: "Identify and count all remaining color highlights (orange, green, blue, purple)"
     output_required: "Color highlight inventory with counts"
     rule: "Do not interpret what highlights mean yet, just count them"
+    note: "Red highlights are consumed in step 1 (furniture). Do not re-count them here."
   
   step_3_icons_and_symbols:
     action: "Identify all person icons, symbols, and simple graphics"
@@ -84,6 +92,18 @@ color_semantics:
     rule: "If x highlights detected → infer x candidates of specified type"
   
   definitions:
+    red_highlight:
+      meaning: "Furniture area"
+      target_type: "AREA_Furniture__*"
+      example_count: 4
+      example_output: ["AREA_Furniture__001", "AREA_Furniture__002", "AREA_Furniture__003", "AREA_Furniture__004"]
+      rationale: |
+        Gray rectangles representing furniture are the most error-prone objects to count
+        from reference images — they blend with backgrounds, nest inside compositions,
+        and hide behind color zones. Red highlights allow the stakeholder to pre-mark
+        furniture explicitly, replacing the unreliable gray-rectangle scan in step 1
+        of the analysis sequence.
+
     orange_highlight:
       meaning: "LABEL"
       target_type: "LABEL__*"
